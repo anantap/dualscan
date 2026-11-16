@@ -96,10 +96,43 @@ final class AppModel {
         }
     }
 
-    /// Binding target for the edit cards.
+    /// Binding target for the edit cards. With several frames selected, a
+    /// change goes to all of them: the setting that moved gets the new value
+    /// everywhere, the other settings stay as each frame had them.
     var shownEdit: EditSettings {
         get { selected.edit }
-        set { selected.edit = newValue; render(selected) }
+        set { setEdit(newValue, syncSelection: true) }
+    }
+
+    func setEdit(_ e: EditSettings, syncSelection: Bool) {
+        let old = selected.edit
+        selected.edit = e
+        render(selected)
+        guard syncSelection else { return }
+        for f in editTargets where f !== selected {
+            f.edit = f.edit.applying(changesFrom: old, to: e)
+            render(f)
+        }
+    }
+
+    /// Selected frames that have an image to edit.
+    var editTargets: [Frame] { selectedFrames.filter { $0.display != nil } }
+
+    /// "Frame 03" or "3 frames".
+    var editTargetLabel: String {
+        let n = max(1, editTargets.count)
+        return n == 1 ? "Frame \(selected.name)" : "\(n) frames"
+    }
+
+    /// The base edit copied with ⇧⌘C.
+    var copiedEdit: EditSettings?
+
+    func copyEdit() { copiedEdit = selected.edit }
+
+    /// Pastes the copied base edit on every selected frame.
+    func pasteEdit() {
+        guard let e = copiedEdit else { return }
+        for f in editTargets { f.edit = e; render(f) }
     }
 
     /// Gives every other scanned frame the selected frame's base edit.
@@ -205,7 +238,7 @@ final class AppModel {
                 f.lastExposure = result.exposure
                 f.phase = .previewed
                 await prepare(f, from: result.image)
-                if isBlank(result.image) { f.skipped = true }
+                if f.histogram.map(isBlank) ?? false { f.skipped = true }
             } catch ScannerError.cancelled {
                 f.phase = .empty
                 return
@@ -220,8 +253,7 @@ final class AppModel {
     }
 
     /// Unexposed film: almost no spread in density.
-    private func isBlank(_ img: Image16) -> Bool {
-        let h = Converter.histogram(img)
+    private func isBlank(_ h: Converter.Histogram) -> Bool {
         guard h.total > 0 else { return true }
         let lo = Converter.percentile(h.counts[1], total: h.total, 0.02)
         let hi = Converter.percentile(h.counts[1], total: h.total, 0.98)
@@ -316,7 +348,8 @@ final class AppModel {
 
     /// Histogram, negative images and first positive for a fresh scan or preview.
     private func prepare(_ f: Frame, from img: Image16) async {
-        f.histogram = await Task.detached { Converter.histogram(img) }.value
+        // Measured once per source, off the main thread.
+        (f.histogram, f.baseEstimate) = await Task.detached { (Converter.histogram(img), Converter.estimateBase(img)) }.value
         estimateFilmBase()
         await updateSources(f)
         rerenderAll()
@@ -326,7 +359,7 @@ final class AppModel {
     /// (unexposed film) count too, and are the best sample there is.
     private func estimateFilmBase() {
         guard baseSource == .measured else { return }
-        let bases = frames.compactMap { f in f.editSource.flatMap { Converter.estimateBase($0) } }
+        let bases = frames.compactMap(\.baseEstimate)
         guard !bases.isEmpty else { return }
         filmBase = (0..<3).map { c in bases.map { $0[c] }.min()! }
     }
@@ -352,7 +385,8 @@ final class AppModel {
             e.wb = n.map { m - $0 }
             e.temp = 0
             e.tint = 0
-            shownEdit = e
+            // The grey spot belongs to this photo, so only this frame changes.
+            setEdit(e, syncSelection: false)
         }
     }
 

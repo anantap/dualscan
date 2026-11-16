@@ -16,6 +16,20 @@ struct EditSettings: Equatable, Sendable {
     var wb: [Double] = [0, 0, 0]
 }
 
+extension EditSettings {
+    private static let fields: [WritableKeyPath<EditSettings, Double>] =
+        [\.exposure, \.contrast, \.black, \.white, \.temp, \.tint, \.saturation]
+
+    /// This edit with the settings that differ between `old` and `new` set to
+    /// their new value; the rest stays.
+    func applying(changesFrom old: EditSettings, to new: EditSettings) -> EditSettings {
+        var out = self
+        for k in Self.fields where old[keyPath: k] != new[keyPath: k] { out[keyPath: k] = new[keyPath: k] }
+        if old.wb != new.wb { out.wb = new.wb }
+        return out
+    }
+}
+
 enum Phase: Equatable {
     case empty, previewing, previewed, queued, scanning, scanned, exported
 
@@ -70,6 +84,8 @@ final class Frame: Identifiable {
     var full: Image16?              // the real scan
     var proxy: Image16?             // downscaled full scan, screen-sized, for live editing
     var histogram: Converter.Histogram?
+    /// Film base density measured in this frame's edit source.
+    @ObservationIgnored var baseEstimate: [Double]?
     var rawURL: URL?
     var lastExposure: RGBExposure?
     var lastFocus: Int?
@@ -101,7 +117,7 @@ final class Frame: Identifiable {
     func reset() {
         phase = .empty; skipped = false; progress = 0
         ownSettings = nil; edit = EditSettings(); rotation = 0
-        preview = nil; full = nil; proxy = nil; histogram = nil; rawURL = nil
+        preview = nil; full = nil; proxy = nil; histogram = nil; baseEstimate = nil; rawURL = nil
         display = nil; thumb = nil; positiveStale = true
         negativeImage = nil; negativeThumb = nil; positiveImage = nil; positiveThumb = nil; error = nil
     }

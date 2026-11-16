@@ -281,9 +281,8 @@ struct EditPanel: View {
 
     var body: some View {
         @Bindable var model = model
-        let f = model.selected
         PanelLayout {
-            HeadCard(title: model.rollName, subtitle: "Frame \(f.name) · base edit", status: status, busy: model.queueRunning,
+            HeadCard(title: model.rollName, subtitle: "\(model.editTargetLabel) · base edit", status: status, busy: model.queueRunning,
                      count: "\(model.scannedCount)", countSup: "scanned")
 
             GlassCard(spacing: 16) {
@@ -302,7 +301,7 @@ struct EditPanel: View {
                 HStack {
                     CardKey(text: "Levels")
                     Spacer()
-                    Dim(text: "Frame \(f.name)")
+                    Dim(text: model.editTargetLabel)
                 }
                 BarSlider(label: "Exposure", value: $model.shownEdit.exposure, range: -100...100)
                 BarSlider(label: "Contrast", value: $model.shownEdit.contrast, range: 0...100, defaultValue: 30, format: { String(Int($0)) })

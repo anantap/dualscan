@@ -68,6 +68,19 @@ enum SelfTest {
             try? await Task.sleep(for: .milliseconds(200))
             log("rotated back: " + sizes())
         }
+        // Sync: frame 02 gets its own contrast, then 01 + 02 move exposure together.
+        let (f1, f2, f3) = (model.frames[0], model.frames[1], model.frames[2])
+        model.select(1)
+        model.shownEdit.contrast = 60
+        model.select(0)
+        model.select(1, modifiers: .command)
+        model.shownEdit.exposure = 25
+        log("sync: 01 exposure \(f1.edit.exposure) contrast \(f1.edit.contrast) · 02 exposure \(f2.edit.exposure) contrast \(f2.edit.contrast) · label \(model.editTargetLabel)")
+        model.copyEdit()
+        model.select(2)
+        model.pasteEdit()
+        log("paste on 03: \(f3.edit == f2.edit ? "same as 02" : "DIFFERENT")")
+        model.select(0)
         model.select(1, modifiers: .command)
         try? await Task.sleep(for: .seconds(1))
         shot("4b-two-selected")
