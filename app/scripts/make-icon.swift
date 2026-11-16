@@ -1,5 +1,5 @@
 // Draws the Dual Scan app icon (1024 px) in the app's own language:
-// a dark tile with mist, an orange glow, a film frame and the four phase dots.
+// a dark tile with mist, an orange glow and the four phase dots in a 2 × 2 grid.
 // Usage: swift scripts/make-icon.swift <out.png>
 import AppKit
 import CoreImage
@@ -50,41 +50,15 @@ ctx.setAlpha(0.85)
 ctx.draw(blobImage, in: CGRect(x: 0, y: 0, width: S, height: S))
 ctx.setAlpha(1)
 
-// Film frame: a 3:2 negative in a strip, with sprocket holes.
-let strip = CGRect(x: 212, y: 392, width: 600, height: 300)
-ctx.addPath(CGPath(roundedRect: strip, cornerWidth: 26, cornerHeight: 26, transform: nil))
-ctx.setFillColor(color(0x232220, 0.92)); ctx.fillPath()
-for i in 0..<8 {
-    let x = strip.minX + 34 + CGFloat(i) * 72
-    for y in [strip.maxY - 34, strip.minY + 18] {
-        ctx.addPath(CGPath(roundedRect: CGRect(x: x, y: y, width: 28, height: 16), cornerWidth: 4, cornerHeight: 4, transform: nil))
-    }
-}
-ctx.setFillColor(color(0xECEBE6, 0.16)); ctx.fillPath()
-
-let frame = CGRect(x: 292, y: 452, width: 440, height: 180)
-ctx.saveGState()
-ctx.addPath(CGPath(roundedRect: frame, cornerWidth: 10, cornerHeight: 10, transform: nil))
-ctx.clip()
-// An orange negative of hills under a sun
-let neg = CGGradient(colorsSpace: space, colors: [color(0xCF7D44), color(0xB8652F)] as CFArray, locations: [0, 1])!
-ctx.drawLinearGradient(neg, start: CGPoint(x: 0, y: frame.maxY), end: CGPoint(x: 0, y: frame.minY), options: [])
-ctx.setFillColor(color(0x6F3A1D)); ctx.fillEllipse(in: CGRect(x: 600, y: 568, width: 54, height: 54))
-let hill = CGMutablePath()
-hill.move(to: CGPoint(x: frame.minX, y: frame.minY + 70))
-hill.addCurve(to: CGPoint(x: frame.maxX, y: frame.minY + 92), control1: CGPoint(x: 400, y: frame.minY + 130), control2: CGPoint(x: 560, y: frame.minY + 40))
-hill.addLine(to: CGPoint(x: frame.maxX, y: frame.minY)); hill.addLine(to: CGPoint(x: frame.minX, y: frame.minY)); hill.closeSubpath()
-ctx.addPath(hill); ctx.setFillColor(color(0xE3A46C)); ctx.fillPath()
-ctx.restoreGState()
-
-// The four phase dots: three done, one busy.
-let d: CGFloat = 46, gap: CGFloat = 26
-let total = 4 * d + 3 * gap
+// The four phase dots in a 2 × 2 grid: three done, one busy (bottom right).
+let d: CGFloat = 176, gap: CGFloat = 64
+let origin = (S - (2 * d + gap)) / 2
 for i in 0..<4 {
-    let r = CGRect(x: (S - total) / 2 + CGFloat(i) * (d + gap), y: 262, width: d, height: d)
+    let col = CGFloat(i % 2), row = CGFloat(1 - i / 2)          // fill top row first
+    let r = CGRect(x: origin + col * (d + gap), y: origin + row * (d + gap), width: d, height: d)
     if i == 3 {
-        ctx.setFillColor(color(0xEF7D3C, 0.18)); ctx.fillEllipse(in: r.insetBy(dx: -12, dy: -12))
-        ctx.setFillColor(color(0xEF7D3C, 0.5)); ctx.fillEllipse(in: r)
+        ctx.setFillColor(color(0xEF7D3C, 0.16)); ctx.fillEllipse(in: r.insetBy(dx: -26, dy: -26))
+        ctx.setFillColor(color(0xEF7D3C, 0.48)); ctx.fillEllipse(in: r)
     } else {
         ctx.setFillColor(color(0xEF7D3C)); ctx.fillEllipse(in: r)
     }
