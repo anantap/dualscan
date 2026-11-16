@@ -237,8 +237,10 @@ struct FrameImage: View {
     }
 
     private var shown: CGImage? {
-        if frame.isScanned { return model.showBefore ? frame.negativeImage : (frame.positiveImage ?? frame.negativeImage) }
-        if model.showPositivePreview { return frame.positiveImage ?? frame.negativeImage }
+        // Until the stage-size render lands, the thumbnail stands in.
+        let positive = frame.positiveImage ?? frame.positiveThumb ?? frame.negativeImage
+        if frame.isScanned { return model.showBefore ? frame.negativeImage : positive }
+        if model.showPositivePreview { return positive }
         return frame.negativeImage
     }
 

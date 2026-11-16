@@ -250,7 +250,7 @@ struct QueueCard: View {
             }
             ForEach(items) { f in
                 HStack(spacing: 12) {
-                    if let img = f.negativeImage {
+                    if let img = f.negativeThumb {
                         Image(decorative: img, scale: 1).resizable().scaledToFill()
                             .frame(width: 48, height: 32).clipShape(RoundedRectangle(cornerRadius: 4))
                     }

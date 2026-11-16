@@ -74,18 +74,24 @@ struct Image16: Sendable {
         return Image16(width: W, height: H, data: out)
     }
 
+    private static let gammaLUT: [UInt8] = (0..<65536).map { UInt8(min(255, (pow(Double($0) / 65535, 1 / 2.2) * 255).rounded())) }
+
     /// The raw negative for display: linear values with a 2.2 gamma, 8-bit RGBA.
     func negativeCGImage() -> CGImage? {
-        var lut = [UInt8](repeating: 0, count: 65536)
-        for i in 0..<65536 { lut[i] = UInt8(min(255, (pow(Double(i) / 65535, 1 / 2.2) * 255).rounded())) }
+        let lut = Self.gammaLUT
         var px = [UInt8](repeating: 255, count: width * height * 4)
-        let n = width * height
-        data.withUnsafeBufferPointer { d in
-            px.withUnsafeMutableBufferPointer { o in
-                for p in 0..<n {
-                    o[p * 4] = lut[Int(d[p * 3])]
-                    o[p * 4 + 1] = lut[Int(d[p * 3 + 1])]
-                    o[p * 4 + 2] = lut[Int(d[p * 3 + 2])]
+        let w = width
+        lut.withUnsafeBufferPointer { L in
+            data.withUnsafeBufferPointer { d in
+                px.withUnsafeMutableBufferPointer { o in
+                    let op = o.baseAddress!
+                    DispatchQueue.concurrentPerform(iterations: height) { y in
+                        for p in (y * w)..<((y + 1) * w) {
+                            op[p * 4] = L[Int(d[p * 3])]
+                            op[p * 4 + 1] = L[Int(d[p * 3 + 1])]
+                            op[p * 4 + 2] = L[Int(d[p * 3 + 2])]
+                        }
+                    }
                 }
             }
         }

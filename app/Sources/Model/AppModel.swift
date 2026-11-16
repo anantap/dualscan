@@ -71,8 +71,6 @@ final class AppModel {
     var showExport = false
     var message: String?
 
-    private var renderTasks: [Int: Task<Void, Never>] = [:]
-
     init() {
         let saved = UserDefaults.standard.object(forKey: "extraWarmup") as? Int
         extraWarmupMinutes = saved ?? 2
@@ -106,7 +104,7 @@ final class AppModel {
 
     /// Gives every other scanned frame the selected frame's base edit.
     func copyEditToAll() {
-        for f in frames where f !== selected && f.editSource != nil { f.edit = selected.edit; render(f, delay: 0.1) }
+        for f in frames where f !== selected && f.editSource != nil { f.edit = selected.edit; render(f) }
     }
 
     // MARK: - Connecting
@@ -276,7 +274,7 @@ final class AppModel {
                 f.lastExposure = result.exposure
                 f.lastFocus = result.focus
                 await saveRaw(f, result.image)
-                f.proxy = await Task.detached { result.image.downscaled(maxEdge: 1800) }.value
+                f.proxy = await Task.detached { result.image.downscaled(maxEdge: AppModel.editEdge) }.value
                 await prepare(f, from: f.proxy!)
                 f.phase = .scanned
             } catch ScannerError.cancelled {
@@ -305,12 +303,11 @@ final class AppModel {
 
     // MARK: - Conversion
 
-    /// Histogram, negative image and first positive for a fresh scan or preview.
+    /// Histogram, negative images and first positive for a fresh scan or preview.
     private func prepare(_ f: Frame, from img: Image16) async {
-        let (hist, neg) = await Task.detached { (Converter.histogram(img), img.negativeCGImage()) }.value
-        f.histogram = hist
-        f.negativeImage = neg
+        f.histogram = await Task.detached { Converter.histogram(img) }.value
         estimateFilmBase()
+        await updateSources(f)
         rerenderAll()
     }
 
@@ -325,8 +322,7 @@ final class AppModel {
 
     /// Handles a click on the image while picking; `point` is 0...1 in the shown image.
     func pick(atUnit point: CGPoint) {
-        guard let mode = picking, let img = selected.editSource else { return }
-        let rotated = img.rotated(selected.rotation)
+        guard let mode = picking, let rotated = selected.display else { return }
         let x = min(rotated.width - 1, Int(point.x * Double(rotated.width)))
         let y = min(rotated.height - 1, Int(point.y * Double(rotated.height)))
         let r = max(2, min(rotated.width, rotated.height) / 200)
@@ -375,8 +371,10 @@ final class AppModel {
         if baseSource == .stock(name) { resetBase() }
     }
 
-    func analysis(for f: Frame) -> Converter.Analysis {
-        // The conversion is shared by the whole roll.
+    /// The conversion is shared by the whole roll.
+    func analysis(for f: Frame) -> Converter.Analysis { rollAnalysis() }
+
+    func rollAnalysis() -> Converter.Analysis {
         let hist: Converter.Histogram?
         do {
             let scanned = frames.filter { $0.isScanned }.compactMap(\.histogram)
@@ -386,45 +384,75 @@ final class AppModel {
         return Converter.analyze(hist, base: filmBase)
     }
 
-    /// The selected frame updates right away; the others (thumbnails) once
-    /// the slider has been still for a moment.
-    func rerenderAll() {
-        for f in frames where f.editSource != nil {
-            render(f, delay: f === selected ? 0 : 0.4)
-        }
+    /// Long edge of the editing copy of a scan: sharp on the stage of a Retina screen.
+    nonisolated static let editEdge = 2400
+    /// Long edge of the strip thumbnails.
+    nonisolated static let thumbEdge = 480
+
+    /// Makes the turned stage and strip copies of a frame and its negative
+    /// images. Runs when the source or the rotation changes, not per render.
+    func updateSources(_ f: Frame) async {
+        guard let src = f.editSource else { return }
+        let rotation = f.rotation
+        let (display, thumb, negative, negativeThumb) = await Task.detached(priority: .userInitiated) {
+            let d = src.rotated(rotation)
+            let t = d.downscaled(maxEdge: AppModel.thumbEdge)
+            return (d, t, d.negativeCGImage(), t.negativeCGImage())
+        }.value
+        // A newer source or rotation may have arrived meanwhile.
+        guard f.editSource?.width == src.width, f.rotation == rotation else { return }
+        f.display = display
+        f.thumb = thumb
+        f.negativeImage = negative
+        f.negativeThumb = negativeThumb
+        f.positiveStale = true
+        render(f)
     }
 
-    func render(_ f: Frame, delay: Double = 0) {
-        guard f.editSource != nil else { return }
-        renderTasks[f.number]?.cancel()
-        renderTasks[f.number] = Task {
-            if delay > 0 {
-                try? await Task.sleep(for: .seconds(delay))
-                if Task.isCancelled { return }
-            }
-            guard let src = f.editSource else { return }
-            let params = Converter.params(analysis(for: f), edit(for: f), film: film)
-            let rotation = f.rotation
-            let image = await Task.detached(priority: .userInitiated) { () -> CGImage? in
-                let r = src.rotated(rotation)
-                return CGImage.rgba8(Converter.render8(r, params), width: r.width, height: r.height)
+    /// Redraws every frame after a roll-wide change. Only the selected frame
+    /// renders at stage size; the rest only redraw their thumbnail.
+    func rerenderAll() {
+        let an = rollAnalysis()
+        for f in frames where f.display != nil { render(f, analysis: an) }
+    }
+
+    private var rendering: Set<Int> = []
+    private var renderAgain: Set<Int> = []
+    private var renderCounter = 0
+
+    /// At most one render per frame runs at a time. Changes that arrive while
+    /// one runs are drawn right after it, with the newest settings, so a fast
+    /// slider never piles up work and the image keeps following it.
+    func render(_ f: Frame, analysis given: Converter.Analysis? = nil) {
+        guard f.display != nil else { return }
+        renderCounter += 1
+        f.requestedRender = renderCounter
+        if rendering.contains(f.number) { renderAgain.insert(f.number); return }
+        rendering.insert(f.number)
+
+        let ticket = renderCounter
+        let params = Converter.params(given ?? rollAnalysis(), f.edit, film: film)
+        let display = f === selected ? f.display : nil
+        let thumb = f.thumb
+        Task {
+            let (big, small) = await Task.detached(priority: .userInitiated) { () -> (CGImage?, CGImage?) in
+                func draw(_ img: Image16?) -> CGImage? {
+                    img.flatMap { CGImage.rgba8(Converter.render8($0, params), width: $0.width, height: $0.height) }
+                }
+                return (draw(display), draw(thumb))
             }.value
-            if !Task.isCancelled { f.positiveImage = image }
+            if let big { f.positiveImage = big; f.positiveStale = false } else { f.positiveStale = true }
+            if let small { f.positiveThumb = small }
+            f.shownRender = ticket
+            rendering.remove(f.number)
+            if renderAgain.remove(f.number) != nil || (f === selected && f.positiveStale) { render(f) }
         }
     }
 
     func rotateSelected() {
-        selected.rotation = (selected.rotation + 270) % 360
         let f = selected
-        if let n = f.negativeImage, f.editSource != nil {
-            _ = n
-            Task {
-                let src = f.editSource!
-                let rot = f.rotation
-                f.negativeImage = await Task.detached { src.rotated(rot).negativeCGImage() }.value
-            }
-        }
-        render(f)
+        f.rotation = (f.rotation + 270) % 360
+        Task { await updateSources(f) }
     }
 
     func setSettingsScope(_ s: Scope) {
@@ -454,6 +482,7 @@ final class AppModel {
             selectedIndex = i
         }
         settingsScope = selected.ownSettings == nil ? .roll : .frame
+        if selected.positiveStale { render(selected) }
     }
 
     /// All frames in the current selection, in strip order.

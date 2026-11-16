@@ -68,15 +68,29 @@ final class Frame: Identifiable {
 
     var preview: Image16?           // 800 dpi
     var full: Image16?              // the real scan
-    var proxy: Image16?             // downscaled full scan, for live editing
+    var proxy: Image16?             // downscaled full scan, screen-sized, for live editing
     var histogram: Converter.Histogram?
     var rawURL: URL?
     var lastExposure: RGBExposure?
     var lastFocus: Int?
 
-    var negativeImage: CGImage?     // what the scanner saw
-    var positiveImage: CGImage?     // after conversion
+    /// The edit source turned the way it is shown, for the stage and the strip.
+    /// Made once per source and rotation, so a render never has to rotate.
+    @ObservationIgnored var display: Image16?
+    @ObservationIgnored var thumb: Image16?
+
+    var negativeImage: CGImage?     // what the scanner saw, stage size
+    var negativeThumb: CGImage?
+    var positiveImage: CGImage?     // after conversion, stage size
+    var positiveThumb: CGImage?
     var error: String?
+
+    /// The stage image is only rendered while the frame is selected; this
+    /// marks that it no longer matches the settings.
+    @ObservationIgnored var positiveStale = true
+    /// Render bookkeeping: the last render asked for and the last one shown.
+    @ObservationIgnored var requestedRender = 0
+    @ObservationIgnored var shownRender = 0
 
     init(number: Int) { self.number = number }
 
@@ -88,6 +102,7 @@ final class Frame: Identifiable {
         phase = .empty; skipped = false; progress = 0
         ownSettings = nil; edit = EditSettings(); rotation = 0
         preview = nil; full = nil; proxy = nil; histogram = nil; rawURL = nil
-        negativeImage = nil; positiveImage = nil; error = nil
+        display = nil; thumb = nil; positiveStale = true
+        negativeImage = nil; negativeThumb = nil; positiveImage = nil; positiveThumb = nil; error = nil
     }
 }

@@ -73,7 +73,7 @@ struct FrameThumb: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             ZStack {
-                if let img = frame.isScanned ? (frame.positiveImage ?? frame.negativeImage) : frame.negativeImage {
+                if let img = frame.isScanned ? (frame.positiveThumb ?? frame.negativeThumb) : frame.negativeThumb {
                     Image(decorative: img, scale: 1).resizable().scaledToFill()
                 } else {
                     RoundedRectangle(cornerRadius: 6).strokeBorder(.white.opacity(0.12), style: StrokeStyle(lineWidth: 1, dash: [4, 3]))

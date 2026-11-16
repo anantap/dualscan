@@ -141,11 +141,22 @@ enum Converter {
         let scale = (0..<3).map { c in Float((positive ? -1 : 1) / (an.hi[c] - an.lo[c])) }
         let lo = (positive ? an.hi : an.lo).map(Float.init)
 
-        // Paper curve: n (log exposure, 0..1) → linear light over ~2 log units,
-        // then sRGB, then an S-curve for contrast and a gamma for midtones.
+        return Params(lo: lo, scale: scale, off: off, curve: paperCurve(contrast: s.contrast, black: s.black, white: s.white),
+                      sat: Float(s.saturation / 100), bw: film == .bw)
+    }
+
+    private static let curveLock = NSLock()
+    nonisolated(unsafe) private static var curveCache: (key: [Double], curve: [Float])?
+
+    /// Paper curve: n (log exposure, 0..1) → linear light over ~2 log units,
+    /// then sRGB, then an S-curve for contrast. Only contrast, black and white
+    /// change it, so the last one is kept: most slider moves reuse it.
+    static func paperCurve(contrast: Double, black: Double, white: Double) -> [Float] {
+        let key = [contrast, black, white]
+        if let c = curveLock.withLock({ curveCache }), c.key == key { return c.curve }
         let R = 2.0, floor = pow(10, -R)
-        let bp = s.black / 200, wp = 1 + s.white / 200
-        let k = 0.01 + s.contrast * 0.08
+        let bp = black / 200, wp = 1 + white / 200
+        let k = 0.01 + contrast * 0.08
         func sig(_ x: Double) -> Double { 1 / (1 + exp(-k * (x - 0.5))) }
         let s0 = sig(0), s1 = sig(1)
         var curve = [Float](repeating: 0, count: curveN)
@@ -158,7 +169,8 @@ enum Converter {
             y = (sig(y) - s0) / (s1 - s0)
             curve[i] = Float(min(1, max(0, y)))
         }
-        return Params(lo: lo, scale: scale, off: off, curve: curve, sat: Float(s.saturation / 100), bw: film == .bw)
+        curveLock.withLock { curveCache = (key, curve) }
+        return curve
     }
 
     /// Renders to sRGB. `bits` 8 gives RGBA bytes, 16 gives RGB 16-bit samples.
