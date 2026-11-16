@@ -169,7 +169,8 @@ struct Toolbar: View {
                     Button("Stop") { model.stopPreview() }.chip(height: 28, small: true)
                 }
             } else if model.queueRunning, let a = model.activeFrame {
-                let done = model.frames.filter { $0.isScanned }.count
+                // A frame that is still being saved counts as done: the scanner is past it.
+                let done = model.frames.filter { $0.isScanned || ($0.phase == .scanning && $0 !== a) }.count
                 let total = done + model.queue.count + 1
                 ProgressPill(text: "Queue · frame \(a.name) · \(done + 1) of \(total)", progress: a.progress) {
                     Button(model.pauseRequested ? "Pausing…" : "Pause") { model.pauseQueue() }

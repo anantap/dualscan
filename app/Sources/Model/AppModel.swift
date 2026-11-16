@@ -256,6 +256,9 @@ final class AppModel {
 
     func pauseQueue() { pauseRequested = true }
 
+    /// When the scanner last delivered a frame, to measure how long it waits.
+    @ObservationIgnored private var lastScanEnded: Date?
+
     private func runQueue() async {
         guard let scanner else { return }
         queueRunning = true
@@ -266,17 +269,18 @@ final class AppModel {
             f.phase = .scanning
             f.progress = 0
             activeFrame = f
+            if let t = lastScanEnded { SelfTest.log(String(format: "scanner idle between frames: %.0f ms", Date().timeIntervalSince(t) * 1000)) }
             do {
                 let result = try await scanner.scan(ScanRequest(frame: f.number, settings: settings(for: f), preview: false)) { p in
                     Task { @MainActor in f.progress = p }
                 }
+                lastScanEnded = Date()
                 f.full = result.image
                 f.lastExposure = result.exposure
                 f.lastFocus = result.focus
-                await saveRaw(f, result.image)
-                f.proxy = await Task.detached { result.image.downscaled(maxEdge: AppModel.editEdge) }.value
-                await prepare(f, from: f.proxy!)
-                f.phase = .scanned
+                // Saving and the editing copy happen next to the next scan,
+                // so the scanner never waits for them.
+                Task { await finishScan(f, result.image) }
             } catch ScannerError.cancelled {
                 f.phase = .queued
                 return
@@ -287,6 +291,13 @@ final class AppModel {
                 return
             }
         }
+    }
+
+    private func finishScan(_ f: Frame, _ image: Image16) async {
+        await saveRaw(f, image)
+        f.proxy = await Task.detached(priority: .userInitiated) { image.downscaled(maxEdge: AppModel.editEdge) }.value
+        await prepare(f, from: f.proxy!)
+        f.phase = .scanned
     }
 
     private func saveRaw(_ f: Frame, _ img: Image16) async {
