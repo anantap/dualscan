@@ -69,6 +69,10 @@ final class AppModel {
     var showPositivePreview = false
     var showBefore = false
     var showExport = false
+    /// Whether the export sheet exports the whole roll or the selection.
+    var exportWholeRoll = false
+    /// Frames done and total while an export runs.
+    var exportProgress: (done: Int, total: Int)?
     var message: String?
 
     init() {

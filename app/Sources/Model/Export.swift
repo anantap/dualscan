@@ -1,9 +1,9 @@
 import Foundation
 import AppKit
 
-struct ExportOptions: Equatable {
-    enum Format: Hashable { case jpeg, baseTIFF, raw }
-    enum Size: Hashable {
+struct ExportOptions: Hashable, Codable {
+    enum Format: String, Hashable, Codable { case jpeg, baseTIFF, raw }
+    enum Size: String, Hashable, Codable {
         case full, edge3000, edge2000
         var maxEdge: Int? { switch self { case .full: return nil; case .edge3000: return 3000; case .edge2000: return 2000 } }
     }
@@ -14,6 +14,16 @@ struct ExportOptions: Equatable {
     var quality = 92.0
 
     init(formats: Set<Format> = [.jpeg]) { self.formats = formats }
+
+    /// The settings of the last export, so the next one starts there.
+    static var last: ExportOptions {
+        get {
+            guard let d = UserDefaults.standard.data(forKey: "exportOptions"),
+                  let o = try? JSONDecoder().decode(ExportOptions.self, from: d) else { return ExportOptions() }
+            return o
+        }
+        set { UserDefaults.standard.set(try? JSONEncoder().encode(newValue), forKey: "exportOptions") }
+    }
 }
 
 /// Apps that can take the scans.
@@ -36,10 +46,21 @@ struct OpenTarget: Identifiable, Hashable {
 }
 
 extension AppModel {
-    /// "Export scan" / "Export 2 scans"
+    /// "Export scan" / "Export 2 scans", or the progress while exporting.
     var exportLabel: String {
-        let n = selectedScans.count
-        return n <= 1 ? "Export scan" : "Export \(n) scans"
+        if let p = exportProgress { return "Exporting \(p.done + 1) of \(p.total)…" }
+        return Self.exportLabel(selectedScans.count)
+    }
+
+    static func exportLabel(_ n: Int) -> String { n <= 1 ? "Export scan" : "Export \(n) scans" }
+
+    /// All scanned frames of the roll, in strip order.
+    var rollScans: [Frame] { frames.filter(\.isScanned) }
+
+    /// Opens the export sheet for the selection, or for the whole roll.
+    func showExportSheet(wholeRoll: Bool) {
+        exportWholeRoll = wholeRoll
+        showExport = true
     }
 
     /// "Open in…" / "Open 2 in…"
@@ -76,7 +97,10 @@ extension AppModel {
     @discardableResult
     func export(_ frames: [Frame], _ o: ExportOptions, reveal: Bool = true) async -> [URL] {
         var written: [URL] = []
-        for f in frames {
+        exportProgress = (0, frames.count)
+        defer { exportProgress = nil }
+        for (i, f) in frames.enumerated() {
+            exportProgress = (i, frames.count)
             guard let full = f.full else { continue }
             let params = Converter.params(analysis(for: f), edit(for: f), film: film)
             let stem = fileStem(f)

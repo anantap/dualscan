@@ -103,8 +103,28 @@ enum SelfTest {
         model.select(1, modifiers: .command)
         try? await Task.sleep(for: .seconds(1))
         shot("4b-two-selected")
+        let t0 = Date()
         let urls = await model.export(model.selectedScans, ExportOptions(formats: [.jpeg, .baseTIFF, .raw]), reveal: false)
+        log(String(format: "export 2 frames × 3 formats: %.2f s", Date().timeIntervalSince(t0)))
         log("exported: \(urls.map(\.lastPathComponent))")
+        do {
+            // Settings survive a round trip (without touching the real preferences).
+            var o = ExportOptions(formats: [.baseTIFF, .raw]); o.size = .edge2000; o.quality = 80
+            let back = try? JSONDecoder().decode(ExportOptions.self, from: JSONEncoder().encode(o))
+            log("export settings round trip: \(back == o ? "same" : "DIFFERENT")")
+            model.select(0)
+            model.showExportSheet(wholeRoll: true)
+            let sheet = ExportSheet().environment(model)
+            let r = ImageRenderer(content: sheet)
+            if let img = r.nsImage, let t = img.tiffRepresentation, let rep = NSBitmapImageRep(data: t),
+               let png = rep.representation(using: .png, properties: [:]) {
+                try? png.write(to: dir.appendingPathComponent("5b-export-sheet-roll.png"))
+            }
+            model.showExport = false
+            let t1 = Date()
+            let all = await model.export(model.rollScans, ExportOptions(formats: [.jpeg]), reveal: false)
+            log(String(format: "export whole roll (%d scans) as JPEG: %d files in %.2f s", model.rollScans.count, all.count, Date().timeIntervalSince(t1)))
+        }
         shot("5-exported")
         log("frames: " + model.frames.map { "\($0.name)=\($0.phase)\($0.skipped ? "/skip" : "")" }.joined(separator: " "))
         NSApp.terminate(nil)

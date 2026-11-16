@@ -339,8 +339,9 @@ struct EditPanel: View {
                 Button(model.openLabel) { showApps = true }
                     .chip(wide: true, height: 48)
                     .popover(isPresented: $showApps, arrowEdge: .leading) { AppPicker(close: { showApps = false }) }
-                Button(model.exportLabel) { model.showExport = true }
+                Button(model.exportLabel) { model.showExportSheet(wholeRoll: false) }
                     .chip(.primary, wide: true, height: 48)
+                    .disabled(model.exportProgress != nil)
             }
         }
     }

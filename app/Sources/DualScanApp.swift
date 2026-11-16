@@ -31,9 +31,12 @@ struct DualScanApp: App {
                     .disabled(model.copiedEdit == nil || model.editTargets.isEmpty)
             }
             CommandGroup(after: .newItem) {
-                Button(model.exportLabel + "…") { model.showExport = true }
+                Button(AppModel.exportLabel(model.selectedScans.count) + "…") { model.showExportSheet(wholeRoll: false) }
                     .keyboardShortcut("e", modifiers: .command)
-                    .disabled(model.selectedScans.isEmpty)
+                    .disabled(model.selectedScans.isEmpty || model.exportProgress != nil)
+                Button("Export Roll…") { model.showExportSheet(wholeRoll: true) }
+                    .keyboardShortcut("e", modifiers: [.command, .shift])
+                    .disabled(model.rollScans.isEmpty || model.exportProgress != nil)
                 Button("Show Scans Folder") { model.revealFolder() }
                     .keyboardShortcut("o", modifiers: [.command, .shift])
             }

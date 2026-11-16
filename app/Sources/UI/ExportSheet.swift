@@ -3,12 +3,14 @@ import SwiftUI
 struct ExportSheet: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
-    @State private var o = ExportOptions()
+    @State private var o = ExportOptions.last
     @State private var bytes: Int?
+
+    private var frames: [Frame] { model.exportWholeRoll ? model.rollScans : model.selectedScans }
 
     private var sizeText: String {
         guard let bytes else { return "Working out the size…" }
-        let n = model.selectedScans.count
+        let n = frames.count
         let total = ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .file)
         let prefix = o.formats.contains(.jpeg) ? "About " : ""
         if n > 1 {
@@ -19,16 +21,24 @@ struct ExportSheet: View {
     }
 
     var body: some View {
-        let frames = model.selectedScans
+        @Bindable var model = model
+        let frames = self.frames
         VStack(alignment: .leading, spacing: 24) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 0) {
                     Text("Export").foregroundStyle(Theme.text)
-                    Text(frames.map { "Frame \($0.name)" }.joined(separator: ", ")).foregroundStyle(Theme.textDim)
+                    Text(frames.isEmpty ? "No scans" : (frames.count > 1 ? "Frames " : "Frame ") + frames.map(\.name).joined(separator: ", "))
+                        .foregroundStyle(Theme.textDim)
                 }
                 .font(.l)
                 Spacer()
                 Button { dismiss() } label: { Image(systemName: "xmark") }.chip().accessibilityLabel("Close")
+            }
+
+            // Only a choice when the roll has more scans than the selection.
+            if model.rollScans.count > model.selectedScans.count {
+                Seg(options: [(false, "Selected · \(model.selectedScans.count)"), (true, "Whole roll · \(model.rollScans.count)")],
+                    selection: $model.exportWholeRoll)
             }
 
             VStack(alignment: .leading, spacing: 8) {
@@ -55,21 +65,25 @@ struct ExportSheet: View {
                 Text(sizeText).font(.m)
                 Spacer()
                 Button("Cancel") { dismiss() }.chip()
-                Button(model.exportLabel) {
+                    .keyboardShortcut(.cancelAction)
+                Button(AppModel.exportLabel(frames.count)) {
                     let opts = o
+                    ExportOptions.last = opts
                     dismiss()
                     Task { await model.export(frames, opts) }
                 }
                 .chip(.primary, height: 48)
+                .keyboardShortcut(.defaultAction)
                 .disabled(frames.isEmpty || o.formats.isEmpty)
                 .opacity(frames.isEmpty || o.formats.isEmpty ? 0.4 : 1)
             }
         }
         .padding(32)
         .frame(width: 720)
-        .task(id: o) {
+        .task(id: [o.hashValue, frames.count]) {
+            bytes = nil
             try? await Task.sleep(for: .milliseconds(150))
-            bytes = await model.estimatedBytes(model.selectedScans, o)
+            bytes = await model.estimatedBytes(frames, o)
         }
         .background(Color(red: 40 / 255, green: 39 / 255, blue: 36 / 255))
         .font(.m)
