@@ -15,3 +15,11 @@ xcodebuild -project DualScan.xcodeproj -scheme DualScan -configuration Release \
 rm -rf "build/Dual Scan.app"
 cp -R "build/DerivedData/Build/Products/Release/Dual Scan.app" build/
 echo "Built: app/build/Dual Scan.app"
+
+# ./build.sh --install also puts it in /Applications
+if [ "${1:-}" = "--install" ]; then
+  pkill -f "Dual Scan.app/Contents/MacOS" || true
+  rm -rf "/Applications/Dual Scan.app"
+  ditto "build/Dual Scan.app" "/Applications/Dual Scan.app"
+  echo "Installed: /Applications/Dual Scan.app"
+fi

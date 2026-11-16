@@ -24,6 +24,7 @@ Needs `brew install autoconf autoconf-archive automake libtool pkgconf libusb ge
 
 ```
 app/build.sh            # → app/build/Dual Scan.app
+app/build.sh --install  # … and copies it to /Applications
 ```
 
 ## Trying it without the scanner
