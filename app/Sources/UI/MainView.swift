@@ -20,6 +20,7 @@ struct MainView: View {
         .foregroundStyle(Theme.text)
         .preferredColorScheme(.dark)
         .sheet(isPresented: $model.showExport) { ExportSheet() }
+        .modifier(KeyboardCommands())
         .alert("Dual Scan", isPresented: Binding(get: { model.message != nil }, set: { if !$0 { model.message = nil } })) {
             Button("OK") { model.message = nil }
         } message: {

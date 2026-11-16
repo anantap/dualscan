@@ -40,10 +40,29 @@ enum SelfTest {
         shot("3-shift-selected")
         model.select(2)
         shot("3-preview-done")
-        model.addToQueue(model.frames[0])
-        model.addToQueue(model.frames[1])
+        // Keys: → → ⇧→ selects 03…04, Q queues them, Q again takes them out.
+        model.select(0)
+        model.perform(.next(extend: false)); model.perform(.next(extend: false)); model.perform(.next(extend: true))
+        let sel = model.selectedFrames.map(\.name).joined(separator: ",")
+        model.perform(.toggleQueue)
+        let queued = model.queue.map(\.name).joined(separator: ",")
+        model.perform(.toggleQueue)
+        model.perform(.previous(extend: false))
+        log("keys: selected \(sel) · Q queued \(queued) · Q again leaves \(model.queue.count) · ← lands on \(model.selected.name)")
+        do {
+            func key(_ c: String, _ code: UInt16, _ m: NSEvent.ModifierFlags = []) -> String {
+                let e = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: m, timestamp: 0, windowNumber: 0, context: nil,
+                                         characters: c, charactersIgnoringModifiers: c, isARepeat: false, keyCode: code)!
+                return KeyCommand.from(e).map { "\($0)" } ?? "passes through"
+            }
+            log("key map: q→\(key("q", 12)) · ⌘q→\(key("q", 12, .command)) · ⇧→→\(key("", 124, .shift)) · return→\(key("\r", 36)) · ⌘return→\(key("\r", 36, .command)) · x→\(key("x", 7))")
+        }
+        model.select(0)
+        model.perform(.toggleQueue)
+        model.select(1)
+        model.perform(.toggleQueue)
         shot("3b-queue")
-        model.startQueue()
+        model.perform(.startQueue)
         await wait { model.frames[0].isScanned }
         model.addAllToQueue()
         model.select(0)

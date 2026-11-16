@@ -31,6 +31,9 @@ struct DualScanApp: App {
                     .disabled(model.copiedEdit == nil || model.editTargets.isEmpty)
             }
             CommandGroup(after: .newItem) {
+                Button(model.exportLabel + "…") { model.showExport = true }
+                    .keyboardShortcut("e", modifiers: .command)
+                    .disabled(model.selectedScans.isEmpty)
                 Button("Show Scans Folder") { model.revealFolder() }
                     .keyboardShortcut("o", modifiers: [.command, .shift])
             }

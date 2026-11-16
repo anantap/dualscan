@@ -181,15 +181,16 @@ struct Toolbar: View {
                     .font(.m).padding(.horizontal, 16).frame(height: 40)
                     .background(Capsule().fill(Theme.surface2))
                 Button { model.eject() } label: { Image(systemName: "eject") }
-                    .chip().help("Eject the film holder")
+                    .chip().help("Eject the film holder (E)")
                     .accessibilityLabel("Eject film holder")
             }
             Spacer()
             if f.isScanned {
                 Button { model.showBefore.toggle() } label: { Label("Before / after", systemImage: "rectangle.split.2x1") }
                     .chip(model.showBefore ? .on : .normal)
+                    .help("Show the negative (B)")
                 Button { model.rotateSelected() } label: { Image(systemName: "rotate.left") }
-                    .chip().help("Rotate left").accessibilityLabel("Rotate left")
+                    .chip().help("Rotate left (R)").accessibilityLabel("Rotate left")
             } else if f.preview != nil {
                 Button("Show as positive") { model.showPositivePreview.toggle() }
                     .chip(model.showPositivePreview ? .on : .normal)

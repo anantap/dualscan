@@ -133,16 +133,19 @@ struct ScanPanel: View {
                         toAdd.forEach { model.addToQueue($0) }
                     }
                     .chip(wide: true, height: 48)
+                    .help("Q")
                 } else if !inQueue.isEmpty {
                     Button(inQueue.count == 1 ? "Remove frame \(inQueue[0].name) from queue" : "Remove \(inQueue.count) frames from queue") {
                         inQueue.forEach { model.removeFromQueue($0) }
                     }
                     .chip(wide: true, height: 48)
+                    .help("Q")
                 }
                 if !model.queueRunning {
                     let n = model.queue.count
                     Button(n == 0 ? "Start queue" : "Start queue · \(n) frame\(n == 1 ? "" : "s")") { model.startQueue() }
                         .chip(.primary, wide: true, height: 48)
+                        .help("Return")
                         .disabled(n == 0 || model.previewRunning)
                         .opacity(n == 0 || model.previewRunning ? 0.4 : 1)
                 }
