@@ -8,10 +8,12 @@ struct ExportOptions: Equatable {
         var maxEdge: Int? { switch self { case .full: return nil; case .edge3000: return 3000; case .edge2000: return 2000 } }
     }
 
-    var format: Format = .jpeg
+    /// Which files to write; several can be chosen.
+    var formats: Set<Format> = [.jpeg]
     var size: Size = .full
     var quality = 92.0
-    var alsoBaseTIFF = true
+
+    init(formats: Set<Format> = [.jpeg]) { self.formats = formats }
 }
 
 /// Apps that can take the scans.
@@ -53,11 +55,9 @@ extension AppModel {
         for f in frames {
             guard let full = f.full else { continue }
             let tiff = full.width * full.height * 6 + 1024
-            switch o.format {
-            case .raw: total += f.rawURL == nil ? tiff : 0
-            case .baseTIFF: total += tiff
-            case .jpeg:
-                guard let proxy = f.proxy else { continue }
+            if o.formats.contains(.raw) { total += tiff }
+            if o.formats.contains(.baseTIFF) { total += tiff }
+            if o.formats.contains(.jpeg), let proxy = f.proxy {
                 let params = Converter.params(analysis(for: f), edit(for: f), film: film)
                 let edge = Double(o.size.maxEdge ?? max(full.width, full.height))
                 let scale = min(1, edge / Double(max(full.width, full.height)))
@@ -68,12 +68,11 @@ extension AppModel {
                 }.value
                 total += Int(Double(sample) * target / Double(proxy.width * proxy.height))
             }
-            if o.format != .baseTIFF && o.alsoBaseTIFF { total += tiff }
         }
         return total
     }
 
-    /// Writes the files for each frame and returns the main file per frame.
+    /// Writes the chosen files for each frame and returns all of them.
     @discardableResult
     func export(_ frames: [Frame], _ o: ExportOptions, reveal: Bool = true) async -> [URL] {
         var written: [URL] = []
@@ -85,38 +84,42 @@ extension AppModel {
             let rotation = f.rotation
             let rawURL = f.rawURL
             do {
-                let url: URL = try await Task.detached(priority: .userInitiated) {
-                    let rotated = full.rotated(rotation)
-                    let tiffURL = folder.appendingPathComponent("\(stem).tif")
-                    if o.format == .baseTIFF || o.alsoBaseTIFF {
-                        try ImageFiles.writeTIFF16(Converter.render16(rotated, params), width: rotated.width,
-                                                   height: rotated.height, to: tiffURL, linear: false)
-                    }
-                    switch o.format {
-                    case .baseTIFF:
-                        return tiffURL
-                    case .raw:
-                        let u0 = folder.appendingPathComponent("\(stem)_raw.tif")
-                        if let rawURL {
-                            // Copy the kept raw scan to the export folder, unless it is already there.
-                            if rawURL.deletingLastPathComponent().standardizedFileURL == folder.standardizedFileURL { return rawURL }
-                            try? FileManager.default.removeItem(at: u0)
-                            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-                            try FileManager.default.copyItem(at: rawURL, to: u0)
-                            return u0
-                        }
+                let urls: [URL] = try await Task.detached(priority: .userInitiated) {
+                    var out: [URL] = []
+                    try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+                    if o.formats.contains(.raw) {
                         let u = folder.appendingPathComponent("\(stem)_raw.tif")
-                        try ImageFiles.writeTIFF16(full.data, width: full.width, height: full.height, to: u, linear: true)
-                        return u
-                    case .jpeg:
-                        let sized = o.size.maxEdge.map { rotated.downscaled(maxEdge: $0) } ?? rotated
-                        let u = folder.appendingPathComponent("\(stem).jpg")
-                        try ImageFiles.writeJPEG(Converter.render8(sized, params), width: sized.width,
-                                                 height: sized.height, to: u, quality: o.quality / 100)
-                        return u
+                        if let rawURL, rawURL.standardizedFileURL == u.standardizedFileURL {
+                            out.append(rawURL)
+                        } else if let rawURL {
+                            // Copy the kept raw scan to the export folder.
+                            try? FileManager.default.removeItem(at: u)
+                            try FileManager.default.copyItem(at: rawURL, to: u)
+                            out.append(u)
+                        } else {
+                            try ImageFiles.writeTIFF16(full.data, width: full.width, height: full.height, to: u, linear: true)
+                            out.append(u)
+                        }
                     }
+                    if o.formats.contains(.baseTIFF) || o.formats.contains(.jpeg) {
+                        let rotated = full.rotated(rotation)
+                        if o.formats.contains(.baseTIFF) {
+                            let u = folder.appendingPathComponent("\(stem).tif")
+                            try ImageFiles.writeTIFF16(Converter.render16(rotated, params), width: rotated.width,
+                                                       height: rotated.height, to: u, linear: false)
+                            out.append(u)
+                        }
+                        if o.formats.contains(.jpeg) {
+                            let sized = o.size.maxEdge.map { rotated.downscaled(maxEdge: $0) } ?? rotated
+                            let u = folder.appendingPathComponent("\(stem).jpg")
+                            try ImageFiles.writeJPEG(Converter.render8(sized, params), width: sized.width,
+                                                     height: sized.height, to: u, quality: o.quality / 100)
+                            out.append(u)
+                        }
+                    }
+                    return out
                 }.value
-                written.append(url)
+                written += urls
                 f.phase = .exported
             } catch {
                 message = error.localizedDescription
@@ -129,8 +132,7 @@ extension AppModel {
 
     /// Saves the selected scans as base TIFFs (or raw, for the converter) and opens them.
     func open(_ frames: [Frame], in target: OpenTarget) async {
-        let o = ExportOptions(format: target.wantsRaw ? .raw : .baseTIFF, alsoBaseTIFF: !target.wantsRaw)
-        let urls = await export(frames, o, reveal: false)
+        let urls = await export(frames, ExportOptions(formats: [target.wantsRaw ? .raw : .baseTIFF]), reveal: false)
         guard !urls.isEmpty, let app = NSWorkspace.shared.urlForApplication(withBundleIdentifier: target.bundleID) else { return }
         _ = try? await NSWorkspace.shared.open(urls, withApplicationAt: app, configuration: NSWorkspace.OpenConfiguration())
     }
@@ -141,7 +143,7 @@ extension AppModel {
         panel.allowedContentTypes = [.application]
         panel.prompt = "Open"
         guard panel.runModal() == .OK, let app = panel.url else { return }
-        let urls = await export(frames, ExportOptions(format: .baseTIFF), reveal: false)
+        let urls = await export(frames, ExportOptions(formats: [.baseTIFF]), reveal: false)
         guard !urls.isEmpty else { return }
         _ = try? await NSWorkspace.shared.open(urls, withApplicationAt: app, configuration: NSWorkspace.OpenConfiguration())
     }

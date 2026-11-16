@@ -293,7 +293,8 @@ struct ProgressPill<Trailing: View>: View {
     }
 }
 
-/// Looks like a text field; shows a folder and opens it in Finder.
+/// Looks like a text field and shows a folder; clicking it runs `open`
+/// (in the export sheet: choose another folder).
 struct FolderBox: View {
     let url: URL
     let open: () -> Void
@@ -303,7 +304,7 @@ struct FolderBox: View {
                 Text(url.path.replacingOccurrences(of: NSHomeDirectory(), with: "~"))
                     .lineLimit(1).truncationMode(.head)
                 Spacer(minLength: 8)
-                Image(systemName: "arrow.up.forward").font(.system(size: 12)).foregroundStyle(Theme.textDim)
+                Image(systemName: "folder").font(.system(size: 13)).foregroundStyle(Theme.textDim)
             }
             .font(.m)
             .foregroundStyle(Theme.text)
@@ -313,7 +314,7 @@ struct FolderBox: View {
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)
-        .help("Show in Finder")
+        .help("Choose a folder")
     }
 }
 

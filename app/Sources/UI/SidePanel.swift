@@ -127,10 +127,17 @@ struct ScanPanel: View {
             if !model.queue.isEmpty || model.queueRunning { QueueCard() }
         } actions: {
             VStack(spacing: 8) {
-                if f.phase == .previewed && !f.skipped {
-                    Button("Add frame \(f.name) to queue") { model.addToQueue(f) }.chip(wide: true, height: 48)
-                } else if f.phase == .queued {
-                    Button("Remove frame \(f.name) from queue") { model.removeFromQueue(f) }.chip(wide: true, height: 48)
+                let toAdd = model.selectedToQueue, inQueue = model.selectedInQueue
+                if !toAdd.isEmpty {
+                    Button(toAdd.count == 1 ? "Add frame \(toAdd[0].name) to queue" : "Add \(toAdd.count) frames to queue") {
+                        toAdd.forEach { model.addToQueue($0) }
+                    }
+                    .chip(wide: true, height: 48)
+                } else if !inQueue.isEmpty {
+                    Button(inQueue.count == 1 ? "Remove frame \(inQueue[0].name) from queue" : "Remove \(inQueue.count) frames from queue") {
+                        inQueue.forEach { model.removeFromQueue($0) }
+                    }
+                    .chip(wide: true, height: 48)
                 }
                 if !model.queueRunning {
                     let n = model.queue.count
@@ -153,7 +160,8 @@ struct ScanPanel: View {
         let name = model.scanner?.displayName ?? "Scanner"
         if model.previewRunning { return [name, "Reading the strip"] }
         if model.queueRunning, let a = model.activeFrame { return [name, "Scanning frame \(a.name)"] }
-        return [name, "\(model.previewedCount) of 6 frames previewed"]
+        if model.selection.count > 1 { return [name, "\(model.selection.count) frames selected"] }
+        return [name, "⇧- or ⌘-click to select more frames"]
     }
 }
 
@@ -195,7 +203,7 @@ struct SettingsCard: View {
             HStack {
                 CardKey(text: "Scan settings")
                 Spacer()
-                Seg(options: [(AppModel.Scope.roll, "Whole roll"), (.frame, "This frame")],
+                Seg(options: [(AppModel.Scope.roll, "Whole roll"), (.frame, model.selection.count > 1 ? "These frames" : "This frame")],
                     selection: Binding(get: { model.settingsScope }, set: { model.setSettingsScope($0) }), small: true)
                     .frame(width: 176)
             }

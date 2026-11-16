@@ -92,7 +92,9 @@ final class AppModel {
     var shownSettings: ScanSettings {
         get { settingsScope == .frame ? (selected.ownSettings ?? rollSettings) : rollSettings }
         set {
-            if settingsScope == .frame { selected.ownSettings = newValue } else { rollSettings = newValue }
+            if settingsScope == .frame {
+                for f in selectedFrames where !f.isScanned { f.ownSettings = newValue }
+            } else { rollSettings = newValue }
         }
     }
 
@@ -427,8 +429,10 @@ final class AppModel {
 
     func setSettingsScope(_ s: Scope) {
         settingsScope = s
-        if s == .frame, selected.ownSettings == nil { selected.ownSettings = rollSettings }
-        if s == .roll { selected.ownSettings = nil }
+        for f in selectedFrames where !f.isScanned {
+            if s == .frame, f.ownSettings == nil { f.ownSettings = selected.ownSettings ?? rollSettings }
+            if s == .roll { f.ownSettings = nil }
+        }
     }
 
     /// Click selects one frame; ⌘-click adds or removes; ⇧-click selects a range.
@@ -451,6 +455,12 @@ final class AppModel {
         }
         settingsScope = selected.ownSettings == nil ? .roll : .frame
     }
+
+    /// All frames in the current selection, in strip order.
+    var selectedFrames: [Frame] { selection.sorted().map { frames[$0] } }
+    /// Selected frames that can go into the queue.
+    var selectedToQueue: [Frame] { selectedFrames.filter { $0.phase == .previewed && !$0.skipped } }
+    var selectedInQueue: [Frame] { selectedFrames.filter { $0.phase == .queued } }
 
     /// Scanned frames in the current selection, in strip order.
     var selectedScans: [Frame] {

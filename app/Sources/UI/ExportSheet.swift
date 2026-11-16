@@ -10,7 +10,7 @@ struct ExportSheet: View {
         guard let bytes else { return "Working out the size…" }
         let n = model.selectedScans.count
         let total = ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .file)
-        let prefix = o.format == .jpeg ? "About " : ""
+        let prefix = o.formats.contains(.jpeg) ? "About " : ""
         if n > 1 {
             let each = ByteCountFormatter.string(fromByteCount: Int64(bytes / n), countStyle: .file)
             return "\(prefix)\(total) in total · \(each) per scan"
@@ -32,31 +32,23 @@ struct ExportSheet: View {
             }
 
             VStack(alignment: .leading, spacing: 8) {
-                Dim(text: "Save as")
+                Dim(text: "Save as · choose one or more")
                 formatRow(.jpeg, "JPG", "JPEG", "Finished photo with your base edit, ready to share")
                 formatRow(.baseTIFF, "TIF", "Base TIFF · 16-bit", "Your base edit at full quality, for editing later")
                 formatRow(.raw, "RAW", "Raw scan · linear 16-bit", "Straight from the scanner, no conversion")
             }
 
-            if o.format == .jpeg {
+            if o.formats.contains(.jpeg) {
                 VStack(alignment: .leading, spacing: 8) {
                     Dim(text: "Size and quality")
                     Seg(options: [(ExportOptions.Size.full, "Full size"), (.edge3000, "3000 px"), (.edge2000, "2000 px")], selection: $o.size)
                     BarSlider(label: "Quality", value: $o.quality, range: 50...100, defaultValue: 92, format: { String(Int($0)) })
                 }
             }
-            if o.format != .baseTIFF {
-                SettingRow(title: "Also keep the base TIFF", detail: "So you can edit later without rescanning", isOn: $o.alsoBaseTIFF)
-            }
 
             VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Dim(text: "Export to")
-                    Spacer()
-                    Button("Change…") { model.chooseFolder() }
-                        .buttonStyle(.plain).font(.s).foregroundStyle(Theme.accentText)
-                }
-                FolderBox(url: model.folder) { model.revealFolder() }
+                Dim(text: "Export to")
+                FolderBox(url: model.folder) { model.chooseFolder() }
             }
 
             HStack(spacing: 8) {
@@ -69,7 +61,8 @@ struct ExportSheet: View {
                     Task { await model.export(frames, opts) }
                 }
                 .chip(.primary, height: 48)
-                .disabled(frames.isEmpty)
+                .disabled(frames.isEmpty || o.formats.isEmpty)
+                .opacity(frames.isEmpty || o.formats.isEmpty ? 0.4 : 1)
             }
         }
         .padding(32)
@@ -84,12 +77,13 @@ struct ExportSheet: View {
     }
 
     private func formatRow(_ f: ExportOptions.Format, _ tag: String, _ title: String, _ detail: String) -> some View {
-        Button { o.format = f } label: {
+        let on = o.formats.contains(f)
+        return         Button { if o.formats.contains(f) { o.formats.remove(f) } else { o.formats.insert(f) } } label: {
             HStack(spacing: 16) {
                 Text(tag).font(.pixel(14))
                     .frame(width: 40, height: 40)
-                    .background(RoundedRectangle(cornerRadius: 10).fill(o.format == f ? Theme.accent : .white.opacity(0.08)))
-                    .foregroundStyle(o.format == f ? .white : Theme.text)
+                    .background(RoundedRectangle(cornerRadius: 10).fill(on ? Theme.accent : .white.opacity(0.08)))
+                    .foregroundStyle(on ? .white : Theme.text)
                 VStack(alignment: .leading, spacing: 0) {
                     Text(title)
                     Dim(text: detail)
@@ -98,7 +92,7 @@ struct ExportSheet: View {
             }
             .padding(12)
             .background(RoundedRectangle(cornerRadius: 16).fill(.white.opacity(0.04)))
-            .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(o.format == f ? Theme.accent : .clear, lineWidth: 1.5))
+            .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(on ? Theme.accent : .clear, lineWidth: 1.5))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
