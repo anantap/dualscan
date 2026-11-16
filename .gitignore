@@ -1,0 +1,11 @@
+# SANE source and build (see README for how to get and build them)
+sane-backends/
+sane/
+reference/
+build-*.log
+
+# Xcode / build output
+app/build/
+app/*.xcodeproj/
+xcuserdata/
+.DS_Store

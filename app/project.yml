@@ -1,0 +1,50 @@
+# XcodeGen project. Generate with:  xcodegen generate   (build.sh does this)
+name: DualScan
+options:
+  bundleIdPrefix: nl.ananta
+  deploymentTarget:
+    macOS: "14.0"
+  createIntermediateGroups: true
+
+targets:
+  DualScan:
+    type: application
+    platform: macOS
+    scheme: {}
+    sources:
+      - path: Sources
+      - path: Resources/Fonts
+        type: folder
+        buildPhase: resources
+      - path: Resources/Assets.xcassets
+    info:
+      path: Info.plist
+      properties:
+        CFBundleDisplayName: Dual Scan
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        LSApplicationCategoryType: public.app-category.photography
+        LSMinimumSystemVersion: $(MACOSX_DEPLOYMENT_TARGET)
+        NSHumanReadableCopyright: For personal use.
+    settings:
+      base:
+        PRODUCT_NAME: Dual Scan
+        PRODUCT_BUNDLE_IDENTIFIER: nl.ananta.dualscan
+        MARKETING_VERSION: "0.1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        SWIFT_VERSION: "5.0"
+        SWIFT_STRICT_CONCURRENCY: minimal
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        SWIFT_OBJC_BRIDGING_HEADER: Sources/Bridging.h
+        # The SANE driver built from source in ../sane (see README).
+        HEADER_SEARCH_PATHS: $(PROJECT_DIR)/../sane/include
+        LIBRARY_SEARCH_PATHS: $(PROJECT_DIR)/../sane/lib
+        OTHER_LDFLAGS: -lsane
+        LD_RUNPATH_SEARCH_PATHS: $(PROJECT_DIR)/../sane/lib
+        GCC_PREPROCESSOR_DEFINITIONS: SANE_DIR=\"$(PROJECT_DIR)/../sane\"
+        # Ad-hoc signing: runs on this Mac without a developer account.
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGN_IDENTITY: "-"
+        DEVELOPMENT_TEAM: ""
+        ENABLE_HARDENED_RUNTIME: NO
+        ENABLE_APP_SANDBOX: NO
