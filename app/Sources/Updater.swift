@@ -208,7 +208,12 @@ final class Updater {
     func restartNow() {
         guard staged != nil, installProblem == nil else { return }
         install(relaunch: true)
-        NSApp.terminate(nil)
+        // The app won't quit while the popup (a sheet) is open: close it first, then quit.
+        promptShown = false
+        Task {
+            try? await Task.sleep(for: .milliseconds(400))
+            NSApp.terminate(nil)
+        }
     }
 
     private static func run(_ tool: String, _ arguments: [String]) throws {
