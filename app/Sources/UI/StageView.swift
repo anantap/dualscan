@@ -34,7 +34,7 @@ struct ConnectSteps: View {
                     step(2, "Warming up the lamp", detail: "Keep the film holder out for now", state: warmState,
                          trailing: warmTrailing(ctx.date))
                     step(3, "Calibrate", detail: "Needs an empty scanner", state: calState)
-                    step(4, "Insert the film strip holder", detail: "The preview starts by itself", state: .todo)
+                    step(4, "Insert the film strip holder", detail: "Front door open to 35 mm, not all the way", state: .todo)
                 }
                 .frame(width: 560)
                 .animation(Motion.slide, value: model.connection)
@@ -132,6 +132,8 @@ struct InsertHolder: View {
             Image(systemName: "film").font(.system(size: 64, weight: .ultraLight)).foregroundStyle(Theme.accentText)
             VStack(spacing: 8) {
                 Text("Insert the film strip holder").font(.l)
+                Text("Open the front door only to the 35 mm position. Fully open is for APS, and then the scanner ignores the holder.")
+                    .foregroundStyle(Theme.textDim).multilineTextAlignment(.center).frame(maxWidth: 420)
                 Text("The app previews the whole strip as soon as the holder is in.").foregroundStyle(Theme.textDim)
             }
             Spacer()
