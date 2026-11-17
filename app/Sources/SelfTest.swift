@@ -12,6 +12,7 @@ enum SelfTest {
     static func run(_ model: AppModel, to dir: URL) async {
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         model.libraryRoot = dir.appendingPathComponent("Library")
+        model.autoEject = false   // strip 1 stays in for the editing checks; strip 2 tests it
         model.folder = dir.appendingPathComponent("Export")
         func shot(_ name: String) {
             let view = MainView().environment(model).frame(width: 1440, height: 900)
@@ -126,6 +127,28 @@ enum SelfTest {
             log(String(format: "export whole roll (%d scans) as JPEG: %d files in %.2f s", model.rollScans.count, all.count, Date().timeIntervalSince(t1)))
         }
         shot("5-exported")
+        // Strip 2: eject, the next strip goes in, its frames continue at 07 and its raw files sit
+        // next to strip 1's instead of over them. The whole roll then has both strips.
+        do {
+            let before = model.rollScans.count
+            let first = model.frames[0], original = first.full
+            model.eject()
+            await wait { model.stripNumber == 2 && model.previewedCount == 6 && !model.previewRunning }
+            shot("7-strip-2")
+            let reread = await first.loadFull()
+            log("strip 1 frame 01 read back from its raw file: in memory \(first.full == nil ? "dropped" : "kept"), pixels " +
+                (reread.map { r in original.map { r.width == $0.width && r.height == $0.height && r.data == $0.data } ?? false } == true ? "identical" : "DIFFERENT"))
+            // Queue the whole strip: when it's done, the strip ejects by itself and strip 3 is next.
+            model.autoEject = true
+            model.addAllToQueue()
+            model.perform(.startQueue)
+            await wait { model.stripNumber == 3 }
+            log("strip 2 done: ejected by itself → strip \(model.stripNumber), frames " + model.frames.map(\.name).joined(separator: ","))
+            let raws = (try? FileManager.default.contentsOfDirectory(atPath: model.rollFolder.appendingPathComponent("Raw").path)) ?? []
+            log("raw files " + raws.sorted().joined(separator: ","))
+            let all = await model.export(model.rollScans, ExportOptions(formats: [.baseTIFF]), reveal: false)
+            log("whole roll after strip 2: \(before) + strip 2 → \(model.rollScans.count) scans, exported \(all.count) base TIFFs: " + all.map(\.lastPathComponent).joined(separator: ","))
+        }
         // The update popup, as if build +2 were downloaded.
         Updater.shared.showForSelfTest(.ready(Updater.shared.currentBuild + 2), notes: [
             "Frame numbers continue across strips, so strip 2 no longer overwrites strip 1",

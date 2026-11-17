@@ -40,7 +40,29 @@ final class AppModel {
     var extraWarmupMinutes: Int {
         didSet { UserDefaults.standard.set(extraWarmupMinutes, forKey: "extraWarmup") }
     }
-    let frames: [Frame] = (1...6).map { Frame(number: $0) }
+    /// The strip in the holder.
+    private(set) var frames: [Frame] = AppModel.strip(1)
+    /// Which strip of the roll is in the holder (1, 2, …).
+    private(set) var stripNumber = 1
+    /// Scanned frames of the strips before this one; their raw files hold the full scans.
+    private(set) var earlierScans: [Frame] = []
+
+    static func strip(_ n: Int) -> [Frame] {
+        (1...6).map { Frame(number: (n - 1) * 6 + $0, position: $0) }
+    }
+
+    /// After a strip with scans comes out, the next one continues the numbering
+    /// (07–12, …), so its files never overwrite the previous strip's.
+    private func startNextStrip() {
+        for f in frames where f.isScanned || f.phase == .scanning {
+            if f.rawURL != nil { f.full = nil }   // the raw file has it; keeps memory down over a roll
+            earlierScans.append(f)
+        }
+        stripNumber += 1
+        frames = Self.strip(stripNumber)
+        selection = [0]
+        selectedIndex = 0
+    }
     var selectedIndex = 0
     var selection: Set<Int> = [0]
     var selected: Frame { frames[selectedIndex] }
@@ -219,7 +241,11 @@ final class AppModel {
         Task {
             do { try await scanner.eject() } catch { message = error.localizedDescription }
             holderIn = false
-            for f in frames where !f.isScanned { f.reset() }
+            if frames.contains(where: \.isScanned) {
+                startNextStrip()
+            } else {
+                for f in frames { f.reset() }   // nothing scanned: the same strip can go back in
+            }
             await waitForHolder()
         }
     }
@@ -235,7 +261,7 @@ final class AppModel {
             f.progress = 0
             activeFrame = f
             do {
-                let result = try await scanner.scan(ScanRequest(frame: f.number, settings: rollSettings, preview: true)) { p in
+                let result = try await scanner.scan(ScanRequest(frame: f.position, settings: rollSettings, preview: true)) { p in
                     Task { @MainActor in f.progress = p }
                 }
                 f.preview = result.image
@@ -287,7 +313,19 @@ final class AppModel {
 
     func startQueue() {
         guard !queueRunning, !previewRunning else { return }
-        Task { await runQueue() }
+        Task {
+            // When the queue has scanned everything on the strip, the strip comes out by itself.
+            if await runQueue(), autoEject, !stripHasMoreToScan { eject() }
+        }
+    }
+
+    /// Eject the strip after the queue finishes it (the self-test turns this off for a while).
+    @ObservationIgnored var autoEject = true
+
+    /// A frame on the strip that isn't scanned and isn't skipped (ring): ejecting now would
+    /// mean putting the strip back in for it.
+    var stripHasMoreToScan: Bool {
+        frames.contains { !$0.skipped && !$0.isScanned && $0.phase != .scanning }
     }
 
     func pauseQueue() { pauseRequested = true }
@@ -295,8 +333,9 @@ final class AppModel {
     /// When the scanner last delivered a frame, to measure how long it waits.
     @ObservationIgnored private var lastScanEnded: Date?
 
-    private func runQueue() async {
-        guard let scanner else { return }
+    /// Scans the queue; true when it ran out (not paused, no error), with every scan saved.
+    private func runQueue() async -> Bool {
+        guard let scanner else { return false }
         queueRunning = true
         pauseRequested = false
         defer { queueRunning = false; activeFrame = nil; pauseRequested = false }
@@ -307,7 +346,7 @@ final class AppModel {
             activeFrame = f
             if let t = lastScanEnded { SelfTest.log(String(format: "scanner idle between frames: %.0f ms", Date().timeIntervalSince(t) * 1000)) }
             do {
-                let result = try await scanner.scan(ScanRequest(frame: f.number, settings: settings(for: f), preview: false)) { p in
+                let result = try await scanner.scan(ScanRequest(frame: f.position, settings: settings(for: f), preview: false)) { p in
                     Task { @MainActor in f.progress = p }
                 }
                 lastScanEnded = Date()
@@ -319,17 +358,24 @@ final class AppModel {
                 Task { await finishScan(f, result.image) }
             } catch ScannerError.cancelled {
                 f.phase = .queued
-                return
+                return false
             } catch {
                 f.phase = .queued
                 f.error = error.localizedDescription
                 message = error.localizedDescription
-                return
+                return false
             }
         }
+        if pauseRequested { return false }
+        // The last frames are still being saved; they go with the strip only once they're done.
+        while frames.contains(where: { $0.phase == .scanning }) {
+            try? await Task.sleep(for: .milliseconds(100))
+        }
+        return true
     }
 
     private func finishScan(_ f: Frame, _ image: Image16) async {
+        f.fullSize = (image.width, image.height)
         await saveRaw(f, image)
         f.proxy = await Task.detached(priority: .userInitiated) { image.downscaled(maxEdge: AppModel.editEdge) }.value
         await prepare(f, from: f.proxy!)

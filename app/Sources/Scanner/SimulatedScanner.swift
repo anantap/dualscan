@@ -24,7 +24,8 @@ final class SimulatedScanner: ScannerDevice, @unchecked Sendable {
 
     func eject() async throws {
         try await Task.sleep(for: .seconds(1))
-        holderInsertedAt = nil
+        // The next strip goes in a few seconds later.
+        holderInsertedAt = Date().addingTimeInterval(3)
     }
 
     func cancel() { lock.withLock { cancelRequested = true } }
