@@ -42,12 +42,10 @@ jobs:
 
       - name: Check the app
         run: |
-          set -x
           APP="app/build/Dual Scan.app"
-          ls -R "$APP/Contents" | head -40
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Contents/Info.plist")" = "${{ github.run_number }}"
           test -f "$APP/Contents/Resources/sane.d/dll.conf"
-          test -f "$APP/Contents/Resources/Fonts/Geist-Regular.ttf"
+          test -f "$APP/Contents/Resources/Fonts/geist-latin.woff2"
           # Nothing outside the app and macOS: no Homebrew, no SANE folder.
           if otool -L "$APP/Contents/MacOS/Dual Scan" | grep -E '/opt/homebrew|/usr/local|/sane/'; then exit 1; fi
 
