@@ -177,7 +177,7 @@ struct Toolbar: View {
                         .chip(height: 28, small: true).disabled(model.pauseRequested)
                 }
             } else {
-                Label("Film strip · 6 frames", systemImage: "film").labelStyle(.titleAndIcon)
+                Label(model.stripNumber > 1 ? "Film strip \(model.stripNumber) · frames \(model.frames[0].name)–\(model.frames[5].name)" : "Film strip · 6 frames", systemImage: "film").labelStyle(.titleAndIcon)
                     .font(.m).padding(.horizontal, 16).frame(height: 40)
                     .background(Capsule().fill(Theme.surface2))
                 Button { model.eject() } label: { Image(systemName: "eject") }

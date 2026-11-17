@@ -54,8 +54,8 @@ extension AppModel {
 
     static func exportLabel(_ n: Int) -> String { n <= 1 ? "Export scan" : "Export \(n) scans" }
 
-    /// All scanned frames of the roll, in strip order.
-    var rollScans: [Frame] { frames.filter(\.isScanned) }
+    /// All scanned frames of the roll, earlier strips included, in roll order.
+    var rollScans: [Frame] { earlierScans + frames.filter(\.isScanned) }
 
     /// Opens the export sheet for the selection, or for the whole roll.
     func showExportSheet(wholeRoll: Bool) {
@@ -74,7 +74,8 @@ extension AppModel {
     func estimatedBytes(_ frames: [Frame], _ o: ExportOptions) async -> Int {
         var total = 0
         for f in frames {
-            guard let full = f.full else { continue }
+            guard let size = f.fullSize else { continue }
+            let full = (width: size.width, height: size.height)
             let tiff = full.width * full.height * 6 + 1024
             if o.formats.contains(.raw) { total += tiff }
             if o.formats.contains(.baseTIFF) { total += tiff }
@@ -101,7 +102,7 @@ extension AppModel {
         defer { exportProgress = nil }
         for (i, f) in frames.enumerated() {
             exportProgress = (i, frames.count)
-            guard let full = f.full else { continue }
+            guard let full = await f.loadFull() else { continue }
             let params = Converter.params(analysis(for: f), edit(for: f), film: film)
             let stem = fileStem(f)
             let folder = self.folder

@@ -68,7 +68,10 @@ enum Phase: Equatable {
 
 @Observable
 final class Frame: Identifiable {
-    let number: Int                 // 1...6
+    /// Number on the roll: strip 1 is 01–06, strip 2 is 07–12, and so on.
+    let number: Int
+    /// Place in the film holder, 1...6: what the scanner is asked to scan.
+    let position: Int
     var id: Int { number }
     var phase: Phase = .empty
     var skipped = false
@@ -81,7 +84,8 @@ final class Frame: Identifiable {
     var rotation = 0                // degrees clockwise
 
     var preview: Image16?           // 800 dpi
-    var full: Image16?              // the real scan
+    var full: Image16?              // the real scan (dropped for earlier strips; the raw file stays)
+    var fullSize: (width: Int, height: Int)?
     var proxy: Image16?             // downscaled full scan, screen-sized, for live editing
     var histogram: Converter.Histogram?
     /// Film base density measured in this frame's edit source.
@@ -108,7 +112,17 @@ final class Frame: Identifiable {
     @ObservationIgnored var requestedRender = 0
     @ObservationIgnored var shownRender = 0
 
-    init(number: Int) { self.number = number }
+    init(number: Int, position: Int) {
+        self.number = number
+        self.position = position
+    }
+
+    /// The real scan: in memory for the strip in the holder, read back from the raw file for earlier strips.
+    func loadFull() async -> Image16? {
+        if let full { return full }
+        guard let rawURL else { return nil }
+        return await Task.detached(priority: .userInitiated) { ImageFiles.readTIFF16(rawURL) }.value
+    }
 
     var name: String { String(format: "%02d", number) }
     var isScanned: Bool { phase == .scanned || phase == .exported }
@@ -117,7 +131,7 @@ final class Frame: Identifiable {
     func reset() {
         phase = .empty; skipped = false; progress = 0
         ownSettings = nil; edit = EditSettings(); rotation = 0
-        preview = nil; full = nil; proxy = nil; histogram = nil; baseEstimate = nil; rawURL = nil
+        preview = nil; full = nil; fullSize = nil; proxy = nil; histogram = nil; baseEstimate = nil; rawURL = nil
         display = nil; thumb = nil; positiveStale = true
         negativeImage = nil; negativeThumb = nil; positiveImage = nil; positiveThumb = nil; error = nil
     }
