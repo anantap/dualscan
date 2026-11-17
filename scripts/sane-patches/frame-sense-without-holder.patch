@@ -1,0 +1,14 @@
+--- a/backend/avision.c
++++ b/backend/avision.c
+@@ -10498,7 +10498,10 @@ sane_control_option (SANE_Handle handle, SANE_Int option,
+ 
+   cap = s->opt[option].cap;
+ 
+-  if (!SANE_OPTION_IS_ACTIVE (cap))
++  /* Reading the frame senses the film holder again, so it must work while
++     the option is inactive (no holder) or a newly inserted holder is never seen. */
++  if (!SANE_OPTION_IS_ACTIVE (cap) &&
++      !(option == OPT_FRAME && action == SANE_ACTION_GET_VALUE))
+     return SANE_STATUS_INVAL;
+ 
+   if (action == SANE_ACTION_GET_VALUE)

@@ -75,9 +75,11 @@ struct HeadCard: View {
                 .font(.s).foregroundStyle(Theme.textDim)
                 Spacer(minLength: 0)
                 HStack(alignment: .top, spacing: 4) {
-                    Text(count).font(.pixel(48)).foregroundStyle(Theme.text)
+                    Text(count).font(.pixel(48)).monospacedDigit().foregroundStyle(Theme.text)
                     Text(countSup).font(.s).foregroundStyle(Theme.textDim)
                 }
+                .lineLimit(1)
+                .fixedSize()
             }
         }
         .padding(24)

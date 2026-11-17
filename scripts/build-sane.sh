@@ -11,8 +11,11 @@ ROOT="$PWD"
 SANE_COMMIT=7bf6abe2bd1b1cb916aa87b6a377a7ee70313eb3
 SRC="$ROOT/build/sane-src"
 OUT="$ROOT/sane"
+# Our fixes on top of that commit; the stamp changes whenever a patch does, so it rebuilds.
+PATCHES=("$ROOT"/scripts/sane-patches/*.patch)
+STAMP="$SANE_COMMIT $(cat "${PATCHES[@]}" | shasum | cut -c1-12)"
 
-if [ "$(cat "$OUT/.commit" 2>/dev/null)" = "$SANE_COMMIT" ] && [ -f "$OUT/lib/libsane.a" ]; then
+if [ "$(cat "$OUT/.commit" 2>/dev/null)" = "$STAMP" ] && [ -f "$OUT/lib/libsane.a" ]; then
   echo "SANE $SANE_COMMIT is already built."
   exit 0
 fi
@@ -33,6 +36,7 @@ fi
 git -C "$SRC" fetch -q --depth 1 origin "$SANE_COMMIT"
 git -C "$SRC" checkout -q --force FETCH_HEAD
 git -C "$SRC" clean -qfdx
+for p in "${PATCHES[@]}"; do git -C "$SRC" apply "$p"; done
 
 cd "$SRC"
 # A shallow checkout has no tags to take the version from.
@@ -54,5 +58,5 @@ cp "$LIBUSB_A" "$OUT/lib/libusb-static.a"
 chmod u+w "$OUT/lib/libusb-static.a"
 # The config the app ships with: only avision, no firmware upload (the Dual IV's own firmware).
 printf 'avision\n' > "$OUT/etc/sane.d/dll.conf"
-echo "$SANE_COMMIT" > "$OUT/.commit"
-echo "Built SANE $SANE_COMMIT into sane/"
+echo "$STAMP" > "$OUT/.commit"
+echo "Built SANE $STAMP into sane/"
