@@ -42,7 +42,9 @@ jobs:
 
       - name: Check the app
         run: |
+          set -x
           APP="app/build/Dual Scan.app"
+          ls -R "$APP/Contents" | head -40
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Contents/Info.plist")" = "${{ github.run_number }}"
           test -f "$APP/Contents/Resources/sane.d/dll.conf"
           test -f "$APP/Contents/Resources/Fonts/Geist-Regular.ttf"
