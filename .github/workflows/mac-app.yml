@@ -25,6 +25,8 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0   # the release notes list the commits since the last release
 
       - name: Install the build tools
         run: brew install autoconf autoconf-archive automake libtool pkgconf libusb gettext xcodegen
@@ -75,7 +77,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # The fixes since the previous release, app changes only: the update popup lists them.
+          PREV=$(gh release view --json tagName -q .tagName 2>/dev/null || true)
+          NOTES=$(git log ${PREV:+$PREV..}HEAD --no-merges --pretty='- %s' -- app scripts | head -40)
+          [ -n "$NOTES" ] || NOTES="- $(git log -1 --pretty=%s)"
           gh release create "build-${{ github.run_number }}" Dual-Scan.zip \
             --target "$GITHUB_SHA" --latest \
             --title "Dual Scan, build ${{ github.run_number }}" \
-            --notes "$(git log -1 --pretty=%s)"
+            --notes "$NOTES"

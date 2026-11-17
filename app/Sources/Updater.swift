@@ -17,6 +17,10 @@ final class Updater {
     }
 
     private(set) var state: State = .idle
+    /// The fixes in the downloaded build(s), newest first, for the update popup.
+    private(set) var notes: [String] = []
+    /// The update popup is open.
+    var promptShown = false
 
     static let repository = "anantap/dualscan"
     static let assetName = "Dual-Scan.zip"
@@ -24,6 +28,12 @@ final class Updater {
 
     let currentBuild = Int(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "") ?? 0
     private var staged: URL?
+
+    /// A build you chose to skip: the popup doesn't come back for it (only for a newer one).
+    private var skippedBuild: Int {
+        get { UserDefaults.standard.integer(forKey: "skippedBuild") }
+        set { UserDefaults.standard.set(newValue, forKey: "skippedBuild") }
+    }
 
     /// Looks once, at launch. Not in the self-test or a local build (build 1).
     func start() {
@@ -39,25 +49,31 @@ final class Updater {
             let browser_download_url: URL
         }
         let tag_name: String
+        let body: String?
+        let draft: Bool
+        let prerelease: Bool
         let assets: [Asset]
+
+        var build: Int? { tag_name.hasPrefix("build-") ? Int(tag_name.dropFirst(6)) : nil }
     }
 
-    /// Looks for a newer build. Started from the menu (`userInitiated`), it also says when there's
-    /// nothing new or the check failed; in the background it stays quiet.
+    /// Looks for a newer build. Started from the menu (`userInitiated`), it always shows the popup
+    /// (even for a skipped build) or says there's nothing new; in the background it stays quiet and
+    /// leaves a skipped build alone.
     func check(userInitiated: Bool = false) {
         switch state {
         case .checking, .downloading:
             return
-        case .ready(let build):
-            if userInitiated { announceReady(build) }
+        case .ready:
+            if userInitiated { promptShown = true }
             return
         default: break
         }
         state = .checking
         Task {
             do {
-                let latest = try await Self.latestRelease()
-                guard let latest, latest.build > currentBuild else {
+                let latest = try await Self.newerReleases(than: currentBuild)
+                guard let latest, userInitiated || latest.build > skippedBuild else {
                     state = .upToDate
                     if userInitiated {
                         alert("Dual Scan is up to date", "You have build \(currentBuild), the newest there is.")
@@ -66,8 +82,9 @@ final class Updater {
                 }
                 state = .downloading(latest.build)
                 staged = try await Self.download(latest.url, build: latest.build)
+                notes = latest.notes
                 state = .ready(latest.build)
-                if userInitiated { announceReady(latest.build) }
+                promptShown = true
             } catch {
                 state = .failed(error.localizedDescription)
                 if userInitiated {
@@ -77,18 +94,17 @@ final class Updater {
         }
     }
 
-    private func announceReady(_ build: Int) {
-        if let problem = installProblem {
-            alert("Build \(build) is ready", problem)
-            return
-        }
-        let panel = NSAlert()
-        panel.messageText = "Build \(build) is ready"
-        panel.informativeText = "You have build \(currentBuild). Restart now to use the new one, or it goes in place when you quit."
-        panel.addButton(withTitle: "Restart Now")
-        panel.addButton(withTitle: "Later")
-        if panel.runModal() == .alertFirstButtonReturn { restartNow() }
+    /// Popup: don't put this build in place, and don't ask about it again.
+    func skip() {
+        guard case .ready(let build) = state else { return }
+        skippedBuild = build
+        staged = nil
+        state = .idle
+        promptShown = false
     }
+
+    /// Popup: it goes in place when you quit.
+    func later() { promptShown = false }
 
     private func alert(_ title: String, _ text: String) {
         let panel = NSAlert()
@@ -97,17 +113,28 @@ final class Updater {
         panel.runModal()
     }
 
-    private static func latestRelease() async throws -> (build: Int, url: URL)? {
-        var request = URLRequest(url: URL(string: "https://api.github.com/repos/\(repository)/releases/latest")!)
+    /// The newest build after `current`, with the fixes of every build in between.
+    private static func newerReleases(than current: Int) async throws -> (build: Int, url: URL, notes: [String])? {
+        var request = URLRequest(url: URL(string: "https://api.github.com/repos/\(repository)/releases?per_page=30")!)
         request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
         request.setValue("DualScan", forHTTPHeaderField: "User-Agent")
         request.cachePolicy = .reloadIgnoringLocalCacheData
         let (data, response) = try await URLSession.shared.data(for: request)
         if (response as? HTTPURLResponse)?.statusCode == 404 { return nil }
-        let release = try JSONDecoder().decode(Release.self, from: data)
-        guard release.tag_name.hasPrefix("build-"), let build = Int(release.tag_name.dropFirst(6)),
-              let asset = release.assets.first(where: { $0.name == assetName }) else { return nil }
-        return (build, asset.browser_download_url)
+        let newer = try JSONDecoder().decode([Release].self, from: data)
+            .filter { !$0.draft && !$0.prerelease && ($0.build ?? 0) > current }
+            .sorted { $0.build! > $1.build! }
+        guard let latest = newer.first, let build = latest.build,
+              let asset = latest.assets.first(where: { $0.name == assetName }) else { return nil }
+        var notes: [String] = []
+        for release in newer {
+            for line in (release.body ?? "").split(whereSeparator: \.isNewline) {
+                var note = line.trimmingCharacters(in: .whitespaces)
+                if note.hasPrefix("- ") { note.removeFirst(2) }
+                if !note.isEmpty, !notes.contains(note) { notes.append(note) }
+            }
+        }
+        return (build, asset.browser_download_url, notes)
     }
 
     /// Downloads and unpacks the build; returns the new app, checked to be that build.
@@ -127,9 +154,10 @@ final class Updater {
     }
 
     /// Only the self-test sets the state by hand, to take pictures of the update card.
-    func showForSelfTest(_ state: State) {
+    func showForSelfTest(_ state: State, notes: [String] = []) {
         guard SelfTest.outputDir != nil else { return }
         self.state = state
+        self.notes = notes
     }
 
     // MARK: - Installing

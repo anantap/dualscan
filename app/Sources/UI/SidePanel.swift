@@ -4,61 +4,13 @@ struct SidePanel: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
-        VStack(spacing: 8) {
-            UpdateCard()
+        Group {
             switch model.mode {
             case .connecting, .insertHolder: ConnectPanel()
             case .working: model.selected.isScanned ? AnyView(EditPanel()) : AnyView(ScanPanel())
             }
         }
-        .animation(.easeOut(duration: 0.25), value: Updater.shared.state)
     }
-}
-
-// MARK: - Update
-
-/// Shows while a newer build downloads, then offers a restart. Restarting waits while
-/// the scanner or an export is busy; quitting puts the update in place too.
-struct UpdateCard: View {
-    @Environment(AppModel.self) private var model
-    private var updater: Updater { .shared }
-
-    var body: some View {
-        switch updater.state {
-        case .downloading(let build):
-            HStack(spacing: 12) {
-                Circle().fill(Theme.accent).frame(width: 8, height: 8)
-                Dim(text: "Downloading build \(build)…")
-                Spacer(minLength: 0)
-            }
-            .padding(.horizontal, 24).padding(.vertical, 16)
-            .background(Glass())
-            .transition(.move(edge: .top).combined(with: .opacity))
-        case .ready(let build):
-            GlassCard(spacing: 4) {
-                Text("Update").font(.s).foregroundStyle(Theme.accentText)
-                Text("Build \(build) is ready")
-                Dim(text: updater.installProblem ?? (model.isBusy
-                    ? "Restart once the scanner is done, or it goes in place when you quit."
-                    : "It goes in place when you restart or quit."))
-                if updater.installProblem == nil {
-                    Button("Restart") { updater.restartNow() }
-                        .chip(.primary, wide: true)
-                        .disabled(model.isBusy)
-                        .opacity(model.isBusy ? 0.4 : 1)
-                        .padding(.top, 12)
-                }
-            }
-            .transition(.move(edge: .top).combined(with: .opacity))
-        default:
-            EmptyView()
-        }
-    }
-}
-
-extension AppModel {
-    /// Scanning or exporting: no restart now.
-    var isBusy: Bool { queueRunning || previewRunning || exportProgress != nil }
 }
 
 /// Cards that scroll, with an optional block of buttons pinned to the bottom.

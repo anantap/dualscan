@@ -126,11 +126,20 @@ enum SelfTest {
             log(String(format: "export whole roll (%d scans) as JPEG: %d files in %.2f s", model.rollScans.count, all.count, Date().timeIntervalSince(t1)))
         }
         shot("5-exported")
-        // The update card: downloading, then ready (shown as if a newer build were there).
-        Updater.shared.showForSelfTest(.downloading(Updater.shared.currentBuild + 1))
-        shot("6-update-downloading")
-        Updater.shared.showForSelfTest(.ready(Updater.shared.currentBuild + 1))
-        shot("6-update-ready")
+        // The update popup, as if build +2 were downloaded.
+        Updater.shared.showForSelfTest(.ready(Updater.shared.currentBuild + 2), notes: [
+            "Frame numbers continue across strips, so strip 2 no longer overwrites strip 1",
+            "Focus once per strip and exposure once per roll",
+            "Eject the strip by itself after its last frame",
+        ])
+        do {
+            let r = ImageRenderer(content: UpdatePrompt().environment(model))
+            r.scale = 2
+            if let img = r.nsImage, let tiff = img.tiffRepresentation, let rep = NSBitmapImageRep(data: tiff),
+               let png = rep.representation(using: .png, properties: [:]) {
+                try? png.write(to: dir.appendingPathComponent("6-update-popup.png"))
+            }
+        }
         Updater.shared.showForSelfTest(.idle)
         log("frames: " + model.frames.map { "\($0.name)=\($0.phase)\($0.skipped ? "/skip" : "")" }.joined(separator: " "))
         NSApp.terminate(nil)
