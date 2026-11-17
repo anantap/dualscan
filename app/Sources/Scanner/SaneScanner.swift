@@ -5,10 +5,10 @@ enum SaneSession {
     static let queue = DispatchQueue(label: "dualscan.sane", qos: .userInitiated)
     private static var initialized = false
 
-    /// Points SANE at the driver built in ../sane, before the first sane_init.
+    /// Points SANE at the config inside the app, before the first sane_init.
     static func configure() {
-        let dir = String(cString: dualscan_sane_dir())
-        setenv("SANE_CONFIG_DIR", dir + "/etc/sane.d", 1)
+        guard let dir = Bundle.main.resourceURL?.appendingPathComponent("sane.d") else { return }
+        setenv("SANE_CONFIG_DIR", dir.path, 1)
     }
 
     /// Looks for a Dual IV. Runs on `queue`. When none is found SANE is shut

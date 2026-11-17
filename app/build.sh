@@ -1,20 +1,19 @@
 #!/bin/bash
-# Builds "Dual Scan.app" into app/build/.
+# Builds "Dual Scan.app" into app/build/, with the SANE driver inside it.
+# BUILD_NUMBER sets the build (GitHub uses its run number; the app updates itself to newer builds).
 set -euo pipefail
 cd "$(dirname "$0")"
 
-if [ ! -f ../sane/lib/libsane.dylib ]; then
-  echo "The SANE driver is missing. Build it first (see README.md)."
-  exit 1
-fi
+command -v xcodegen >/dev/null 2>&1 || { echo "XcodeGen is missing. Install it with:  brew install xcodegen"; exit 1; }
+../scripts/build-sane.sh
 
 xcodegen generate --quiet
 xcodebuild -project DualScan.xcodeproj -scheme DualScan -configuration Release \
-  -derivedDataPath build/DerivedData -quiet build
+  -derivedDataPath build/DerivedData -quiet build CURRENT_PROJECT_VERSION="${BUILD_NUMBER:-1}"
 
 rm -rf "build/Dual Scan.app"
 cp -R "build/DerivedData/Build/Products/Release/Dual Scan.app" build/
-echo "Built: app/build/Dual Scan.app"
+echo "Built: app/build/Dual Scan.app (build ${BUILD_NUMBER:-1})"
 
 # ./build.sh --install also puts it in /Applications
 if [ "${1:-}" = "--install" ]; then

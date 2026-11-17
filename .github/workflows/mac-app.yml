@@ -1,0 +1,81 @@
+name: Mac app
+
+# Builds Dual Scan on a Mac (with the SANE driver inside), runs the self-test on the simulated
+# scanner, and publishes the finished app as the latest GitHub release (tag build-<run number>).
+# The app checks that release and updates itself, like Roll Converter.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'app/**'
+      - 'scripts/**'
+      - '.github/workflows/mac-app.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: mac-app-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    # The app targets macOS 26, so it needs Xcode 26.
+    runs-on: macos-26
+    timeout-minutes: 40
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install the build tools
+        run: brew install autoconf autoconf-archive automake libtool pkgconf libusb gettext xcodegen
+
+      - name: Reuse the SANE build
+        uses: actions/cache@v4
+        with:
+          path: sane
+          key: sane-${{ runner.os }}-${{ hashFiles('scripts/build-sane.sh') }}
+
+      - name: Build the app
+        run: |
+          xcodebuild -version
+          BUILD_NUMBER=${{ github.run_number }} ./app/build.sh
+
+      - name: Check the app
+        run: |
+          APP="app/build/Dual Scan.app"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Contents/Info.plist")" = "${{ github.run_number }}"
+          test -f "$APP/Contents/Resources/sane.d/dll.conf"
+          ls "$APP/Contents/Resources" | grep -q 'Geist-Regular.ttf'
+          # Nothing outside the app and macOS: no Homebrew, no SANE folder.
+          if otool -L "$APP/Contents/MacOS/Dual Scan" | grep -E '/opt/homebrew|/usr/local|/sane/'; then exit 1; fi
+
+      - name: Run the self-test
+        run: |
+          OUT="$RUNNER_TEMP/selftest"
+          "app/build/Dual Scan.app/Contents/MacOS/Dual Scan" --selftest "$OUT" &
+          PID=$!
+          for i in $(seq 1 180); do kill -0 $PID 2>/dev/null || break; sleep 1; done
+          kill $PID 2>/dev/null && { echo "The self-test didn't finish"; exit 1; } || true
+          cat "$OUT/log.txt"
+          grep -q '^frames: .*exported' "$OUT/log.txt"
+          mkdir -p selftest && cp "$OUT"/*.png "$OUT/log.txt" selftest/
+
+      - name: Package the app
+        run: ditto -c -k --keepParent "app/build/Dual Scan.app" Dual-Scan.zip
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: Dual-Scan
+          path: |
+            Dual-Scan.zip
+            selftest/
+          retention-days: 30
+
+      - name: Publish as the latest release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "build-${{ github.run_number }}" Dual-Scan.zip \
+            --target "$GITHUB_SHA" --latest \
+            --title "Dual Scan, build ${{ github.run_number }}" \
+            --notes "$(git log -1 --pretty=%s)"

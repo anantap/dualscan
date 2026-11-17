@@ -8,24 +8,28 @@ a JPEG, a 16-bit base TIFF or the raw scan, or open the scans in another app.
 
 No reverse engineering needed: the open-source SANE project added Dual IV
 support to its `avision` driver in November 2026. It is not in a SANE release
-yet, so it is built from source here:
-
-```
-cd sane-backends
-PATH="/opt/homebrew/opt/libtool/libexec/gnubin:$PATH" ./autogen.sh
-./configure --prefix=$HOME/dualscan/sane BACKENDS="avision test" --with-usb --without-snmp --disable-locking
-make -j8 && make install
-printf 'avision\ntest\n' > ../sane/etc/sane.d/dll.conf
-```
+yet, so `scripts/build-sane.sh` builds it from a pinned master commit into
+`sane/`: only the avision backend, as one static library, with a static libusb.
+Both are linked into the app, so `Dual Scan.app` needs nothing outside itself.
 
 Needs `brew install autoconf autoconf-archive automake libtool pkgconf libusb gettext xcodegen`.
 
 ## Building the app
 
 ```
-app/build.sh            # → app/build/Dual Scan.app
+app/build.sh            # → app/build/Dual Scan.app (builds SANE first if needed)
 app/build.sh --install  # … and copies it to /Applications
 ```
+
+## Updates
+
+Like Roll Converter: every push to `main` that touches the app makes GitHub
+(`.github/workflows/mac-app.yml`) build it, run the self-test and publish it
+as the latest release, `build-<n>` with `Dual-Scan.zip`. The app looks for a
+newer build when it starts (and under Dual Scan › Check for Updates…),
+downloads it in the background and puts it in place when you restart or quit.
+It won't restart while the scanner or an export is busy. A local build is
+build 1 and never looks for updates.
 
 ## Trying it without the scanner
 

@@ -9,3 +9,4 @@ app/build/
 app/*.xcodeproj/
 xcuserdata/
 .DS_Store
+build/

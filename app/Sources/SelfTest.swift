@@ -126,6 +126,12 @@ enum SelfTest {
             log(String(format: "export whole roll (%d scans) as JPEG: %d files in %.2f s", model.rollScans.count, all.count, Date().timeIntervalSince(t1)))
         }
         shot("5-exported")
+        // The update card: downloading, then ready (shown as if a newer build were there).
+        Updater.shared.showForSelfTest(.downloading(Updater.shared.currentBuild + 1))
+        shot("6-update-downloading")
+        Updater.shared.showForSelfTest(.ready(Updater.shared.currentBuild + 1))
+        shot("6-update-ready")
+        Updater.shared.showForSelfTest(.idle)
         log("frames: " + model.frames.map { "\($0.name)=\($0.phase)\($0.skipped ? "/skip" : "")" }.joined(separator: " "))
         NSApp.terminate(nil)
     }

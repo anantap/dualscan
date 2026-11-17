@@ -2,6 +2,7 @@ import SwiftUI
 
 @main
 struct DualScanApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var model = AppModel()
 
     init() {
@@ -21,6 +22,9 @@ struct DualScanApp: App {
         .defaultSize(width: 1440, height: 900)
         .windowResizability(.contentMinSize)
         .commands {
+            CommandGroup(after: .appInfo) {
+                Button("Check for Updates…") { Updater.shared.check(userInitiated: true) }
+            }
             CommandGroup(after: .pasteboard) {
                 Divider()
                 Button("Copy Edit") { model.copyEdit() }
@@ -41,5 +45,16 @@ struct DualScanApp: App {
                     .keyboardShortcut("o", modifiers: [.command, .shift])
             }
         }
+    }
+}
+
+final class AppDelegate: NSObject, NSApplicationDelegate {
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        Updater.shared.start()
+    }
+
+    /// A downloaded update goes in place when the app quits, so the next start is the new version.
+    func applicationWillTerminate(_ notification: Notification) {
+        MainActor.assumeIsolated { Updater.shared.install(relaunch: false) }
     }
 }

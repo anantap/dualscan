@@ -17,6 +17,10 @@ targets:
         type: folder
         buildPhase: resources
       - path: Resources/Assets.xcassets
+      # The SANE config the driver reads (avision only), from ../sane (scripts/build-sane.sh).
+      - path: ../sane/etc/sane.d
+        type: folder
+        buildPhase: resources
     info:
       path: Info.plist
       properties:
@@ -38,12 +42,13 @@ targets:
         # The SANE build is Apple Silicon only.
         ARCHS: arm64
         SWIFT_OBJC_BRIDGING_HEADER: Sources/Bridging.h
-        # The SANE driver built from source in ../sane (see README).
+        # The SANE driver from ../sane (scripts/build-sane.sh), linked in statically with libusb,
+        # so the app needs nothing outside itself and can update itself.
         HEADER_SEARCH_PATHS: $(PROJECT_DIR)/../sane/include
-        LIBRARY_SEARCH_PATHS: $(PROJECT_DIR)/../sane/lib
-        OTHER_LDFLAGS: -lsane
-        LD_RUNPATH_SEARCH_PATHS: $(PROJECT_DIR)/../sane/lib
-        GCC_PREPROCESSOR_DEFINITIONS: SANE_DIR=\"$(PROJECT_DIR)/../sane\"
+        OTHER_LDFLAGS: >-
+          $(PROJECT_DIR)/../sane/lib/libsane.a
+          $(PROJECT_DIR)/../sane/lib/libusb-static.a
+          -framework IOKit -framework CoreFoundation -framework Security
         # Ad-hoc signing: runs on this Mac without a developer account.
         CODE_SIGN_STYLE: Manual
         CODE_SIGN_IDENTITY: "-"
