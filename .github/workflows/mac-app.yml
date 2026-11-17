@@ -45,7 +45,7 @@ jobs:
           APP="app/build/Dual Scan.app"
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Contents/Info.plist")" = "${{ github.run_number }}"
           test -f "$APP/Contents/Resources/sane.d/dll.conf"
-          ls "$APP/Contents/Resources" | grep -q 'Geist-Regular.ttf'
+          test -f "$APP/Contents/Resources/Fonts/Geist-Regular.ttf"
           # Nothing outside the app and macOS: no Homebrew, no SANE folder.
           if otool -L "$APP/Contents/MacOS/Dual Scan" | grep -E '/opt/homebrew|/usr/local|/sane/'; then exit 1; fi
 
