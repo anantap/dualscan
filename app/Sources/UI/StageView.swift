@@ -21,6 +21,7 @@ struct StageView: View {
 
 struct ConnectSteps: View {
     @Environment(AppModel.self) private var model
+    @Namespace private var highlight
 
     enum StepState { case done, now, todo }
 
@@ -36,6 +37,7 @@ struct ConnectSteps: View {
                     step(4, "Insert the film strip holder", detail: "The preview starts by itself", state: .todo)
                 }
                 .frame(width: 560)
+                .animation(Motion.slide, value: model.connection)
                 if case .failed(let msg) = model.connection {
                     VStack(spacing: 12) {
                         Text(msg).foregroundStyle(Theme.accentText).multilineTextAlignment(.center)
@@ -107,8 +109,18 @@ struct ConnectSteps: View {
             if let trailing { Text(trailing).font(.pixel(24)) }
         }
         .padding(.horizontal, 24).padding(.vertical, 20)
-        .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(state == .now ? Theme.accent.opacity(0.12) : .white.opacity(0.04)))
-        .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(state == .now ? Theme.accent.opacity(0.5) : .clear, lineWidth: 1.5))
+        .background {
+            ZStack {
+                RoundedRectangle(cornerRadius: 20, style: .continuous).fill(.white.opacity(0.04))
+                // One highlight that slides to the step that's happening now.
+                if state == .now {
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .fill(Theme.accent.opacity(0.12))
+                        .strokeBorder(Theme.accent.opacity(0.5), lineWidth: 1.5)
+                        .matchedGeometryEffect(id: "now", in: highlight)
+                }
+            }
+        }
         .opacity(state == .todo ? 0.55 : 1)
     }
 }

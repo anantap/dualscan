@@ -3,13 +3,23 @@ import SwiftUI
 struct SidePanel: View {
     @Environment(AppModel.self) private var model
 
+    private enum Kind { case connect, scan, edit }
+    private var kind: Kind {
+        switch model.mode {
+        case .connecting, .insertHolder: return .connect
+        case .working: return model.selected.isScanned ? .edit : .scan
+        }
+    }
+
     var body: some View {
-        Group {
-            switch model.mode {
-            case .connecting, .insertHolder: ConnectPanel()
-            case .working: model.selected.isScanned ? AnyView(EditPanel()) : AnyView(ScanPanel())
+        ZStack {
+            switch kind {
+            case .connect: ConnectPanel().transition(.opacity)
+            case .scan: ScanPanel().transition(.opacity)
+            case .edit: EditPanel().transition(.opacity)
             }
         }
+        .animation(Motion.fade, value: kind)
     }
 }
 
@@ -271,8 +281,12 @@ struct QueueCard: View {
                 .padding(.horizontal, 12).padding(.vertical, 10)
                 .background(RoundedRectangle(cornerRadius: 16).fill(.white.opacity(0.04)))
                 .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(f.phase == .scanning ? Theme.accent.opacity(0.5) : .clear, lineWidth: 1.5))
+                .transition(.asymmetric(insertion: .move(edge: .top).combined(with: .opacity),
+                                        removal: .move(edge: .leading).combined(with: .opacity)))
             }
         }
+        .animation(Motion.slide, value: items.map(\.id))
+        .animation(Motion.fade, value: items.map { $0.phase == .scanning })
     }
 }
 

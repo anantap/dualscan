@@ -46,11 +46,20 @@ extension AppModel {
 
 struct StripView: View {
     @Environment(AppModel.self) private var model
+    @Namespace private var outline
 
     var body: some View {
         HStack(spacing: 8) {
             ForEach(Array(model.frames.enumerated()), id: \.element.id) { i, f in
-                FrameThumb(frame: f, active: model.selection.contains(i) && model.mode == .working)
+                let active = model.selection.contains(i) && model.mode == .working
+                FrameThumb(frame: f, active: active)
+                    .overlay {
+                        if active {
+                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                .strokeBorder(Theme.accent, lineWidth: 1.5)
+                                .matchedGeometryEffect(id: model.selection.count == 1 ? "one" : "frame-\(i)", in: outline)
+                        }
+                    }
                     .onTapGesture {
                         let flags = NSEvent.modifierFlags
                         var mods: EventModifiers = []
@@ -67,6 +76,7 @@ struct StripView: View {
                     }
             }
         }
+        .animation(Motion.slide, value: model.selection)
     }
 }
 
@@ -97,7 +107,6 @@ struct FrameThumb: View {
         }
         .padding(8)
         .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(frame.preview == nil ? .white.opacity(0.04) : Theme.surface))
-        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(active ? Theme.accent : .clear, lineWidth: 1.5))
         .contentShape(Rectangle())
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Frame \(frame.name), \(frame.skipped ? "skipped" : frame.phase.label)")

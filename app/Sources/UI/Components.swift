@@ -1,5 +1,15 @@
 import SwiftUI
 
+// MARK: - Motion
+
+/// Short, so a click takes effect at once and only the picture catches up.
+enum Motion {
+    /// Something moving to a new place: the toggle pill, the frame outline, the step highlight.
+    static let slide = Animation.snappy(duration: 0.22)
+    /// Something changing in place: dots, panels.
+    static let fade = Animation.easeOut(duration: 0.2)
+}
+
 // MARK: - Cards
 
 struct GlassCard<Content: View>: View {
@@ -135,18 +145,22 @@ struct Seg<T: Hashable>: View {
     let options: [(T, String)]
     @Binding var selection: T
     var small = false
+    @Namespace private var pill
 
     var body: some View {
         HStack(spacing: 4) {
             ForEach(options, id: \.0) { value, label in
-                Button { selection = value } label: {
+                Button { withAnimation(Motion.slide) { selection = value } } label: {
                     Text(label)
                         .font(small ? .s : .m)
                         .lineLimit(1)
                         .frame(maxWidth: .infinity)
                         .frame(height: small ? 28 : 40)
                         .foregroundStyle(selection == value ? Theme.bg : Theme.textFaint)
-                        .background(Capsule().fill(selection == value ? Theme.text : .clear))
+                        .background {
+                            // One pill that slides to the chosen option.
+                            if selection == value { Capsule().fill(Theme.text).matchedGeometryEffect(id: "pill", in: pill) }
+                        }
                         .contentShape(Capsule())
                 }
                 .buttonStyle(.plain)
@@ -262,6 +276,9 @@ struct PhaseDots: View {
                     .frame(width: size, height: size)
             }
         }
+        .animation(Motion.fade, value: filled)
+        .animation(Motion.fade, value: busy)
+        .animation(Motion.fade, value: skipped)
     }
 
     private func fill(_ i: Int) -> Color {
@@ -282,6 +299,7 @@ struct ProgressPill<Trailing: View>: View {
             ZStack(alignment: .leading) {
                 Capsule().fill(.white.opacity(0.12))
                 Capsule().fill(Theme.accent).frame(width: 120 * min(1, max(0, progress)))
+                    .animation(.linear(duration: 0.3), value: progress)
             }
             .frame(width: 120, height: 4)
             trailing
