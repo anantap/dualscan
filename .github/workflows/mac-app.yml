@@ -56,10 +56,12 @@ jobs:
           OUT="$RUNNER_TEMP/selftest"
           "app/build/Dual Scan.app/Contents/MacOS/Dual Scan" --selftest "$OUT" &
           PID=$!
-          for i in $(seq 1 180); do kill -0 $PID 2>/dev/null || break; sleep 1; done
+          for i in $(seq 1 480); do kill -0 $PID 2>/dev/null || break; sleep 1; done
           kill $PID 2>/dev/null && { echo "The self-test didn't finish"; exit 1; } || true
           cat "$OUT/log.txt"
-          grep -q '^frames: .*exported' "$OUT/log.txt"
+          grep -q 'pixels identical' "$OUT/log.txt"       # earlier strips read back exactly
+          grep -q 'ejected by itself' "$OUT/log.txt"       # auto-eject after the queue
+          grep -q 'exported 10 base TIFFs' "$OUT/log.txt"  # numbers continue: no overwrites
           mkdir -p selftest && cp "$OUT"/*.png "$OUT/log.txt" selftest/
 
       - name: Package the app
