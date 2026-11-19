@@ -7,6 +7,43 @@ enum FilmType: String, CaseIterable, Codable, Sendable {
     }
 }
 
+/// What the connected scanner can do, read from the driver once it is open.
+/// The Dual IV does everything; the Dual III scans at up to 2820 dpi and
+/// leaves exposure, focus and multi-sampling to the scanner itself.
+struct ScannerCapabilities: Equatable, Sendable {
+    /// Offered scan resolutions, lowest first; the last is full resolution.
+    var resolutions: [Int]
+    var previewDPI: Int
+    /// Auto exposure and per-channel exposure times.
+    var exposure: Bool
+    var autofocus: Bool
+    var multiSample: Bool
+    /// Whether the scanner pushes the holder out itself.
+    var eject: Bool
+    /// The Dual IV's front door has a 35 mm and an APS position.
+    var apsDoor = false
+
+    var fullDPI: Int { resolutions.last ?? previewDPI }
+
+    static let dualIV = ScannerCapabilities(resolutions: [800, 1600, 3200], previewDPI: 800,
+                                            exposure: true, autofocus: true, multiSample: true, eject: true, apsDoor: true)
+    static let dualIII = ScannerCapabilities(resolutions: [705, 1410, 2820], previewDPI: 705,
+                                             exposure: false, autofocus: false, multiSample: false, eject: true)
+
+    /// Settings this scanner can do: the nearest resolution it offers, and
+    /// nothing it can't do switched on.
+    func fitting(_ s: ScanSettings) -> ScanSettings {
+        var s = s
+        if !resolutions.contains(s.dpi) {
+            s.dpi = resolutions.min { abs($0 - s.dpi) < abs($1 - s.dpi) } ?? s.dpi
+        }
+        if !exposure { s.autoExposure = true }
+        if !autofocus { s.autofocus = false }
+        if !multiSample { s.multiSample = false }
+        return s
+    }
+}
+
 /// Per-channel exposure time in the Dual IV's units (54...2033; 100 = calibration).
 struct RGBExposure: Codable, Equatable, Sendable {
     var r = 100, g = 100, b = 100
@@ -22,8 +59,9 @@ struct ScanSettings: Equatable, Sendable {
     var autofocus = true
     var multiSample = false
 
-    var summary: String {
-        var parts = ["\(dpi) dpi", autoExposure ? "auto exposure" : "manual exposure"]
+    func summary(_ caps: ScannerCapabilities) -> String {
+        var parts = ["\(dpi) dpi"]
+        if caps.exposure { parts.append(autoExposure ? "auto exposure" : "manual exposure") }
         if autofocus { parts.append("AF") }
         if multiSample { parts.append("multi-sample") }
         return parts.joined(separator: " · ")
@@ -60,6 +98,8 @@ enum ScannerError: LocalizedError {
 /// simulated one, so the app can be used without the hardware.
 protocol ScannerDevice: AnyObject {
     var displayName: String { get }
+    /// What the scanner can do; known once it is open.
+    var capabilities: ScannerCapabilities { get }
     /// Opens the device. For the Dual IV this includes the driver's own lamp
     /// wait and a first calibration.
     func open() async throws

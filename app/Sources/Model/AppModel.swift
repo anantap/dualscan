@@ -20,6 +20,8 @@ final class AppModel {
     var connection: Connection = .searching
     var useSimulator = false
     private(set) var scanner: ScannerDevice?
+    /// What the connected scanner can do; the settings card and the stage follow it.
+    private(set) var capabilities = ScannerCapabilities.dualIV
     var holderIn = false
     var connectedAt: Date?
     var warmupStarted: Date?
@@ -109,7 +111,7 @@ final class AppModel {
     var previewedCount: Int { frames.filter { $0.phase != .empty && $0.phase != .previewing }.count }
     var hasPreviews: Bool { frames.contains { $0.preview != nil } }
 
-    func settings(for f: Frame) -> ScanSettings { f.ownSettings ?? rollSettings }
+    func settings(for f: Frame) -> ScanSettings { capabilities.fitting(f.ownSettings ?? rollSettings) }
     func edit(for f: Frame) -> EditSettings { f.edit }
 
     /// Binding target for the scan settings card.
@@ -170,12 +172,20 @@ final class AppModel {
 
     func start() {
         SaneSession.configure()
+        if CommandLine.arguments.contains("--simulate-dual-iii") {
+            useSimulator = true
+            simulatedModel = .dualIII
+            extraWarmupMinutes = 0
+        }
         if CommandLine.arguments.contains("--simulate") || CommandLine.arguments.contains("--selftest") {
             useSimulator = true
             extraWarmupMinutes = 0
         }
         Task { await connect() }
     }
+
+    /// Which model the simulator plays.
+    @ObservationIgnored var simulatedModel = ScannerCapabilities.dualIV
 
     func useSimulatedScanner() {
         useSimulator = true
@@ -187,11 +197,11 @@ final class AppModel {
         var device: ScannerDevice?
         while device == nil {
             if useSimulator {
-                device = SimulatedScanner(film: film)
+                device = SimulatedScanner(film: film, capabilities: simulatedModel)
                 break
             }
             let found: (name: String, model: String)? = await withCheckedContinuation { c in
-                SaneSession.queue.async { c.resume(returning: SaneSession.findDualIV()) }
+                SaneSession.queue.async { c.resume(returning: SaneSession.findScanner()) }
             }
             if let found {
                 device = SaneScanner(deviceName: found.name, displayName: found.model)
@@ -209,6 +219,8 @@ final class AppModel {
             connection = .failed(error.localizedDescription)
             return
         }
+        capabilities = device.capabilities
+        rollSettings = capabilities.fitting(rollSettings)
         connectedAt = Date()
         let until = Date().addingTimeInterval(Double(extraWarmupMinutes) * 60)
         connection = .warmingUp(until: until)

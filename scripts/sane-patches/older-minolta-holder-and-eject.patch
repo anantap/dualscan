@@ -1,0 +1,29 @@
+diff --git a/backend/avision.c b/backend/avision.c
+index 06752cb..4e8802b 100644
+--- a/backend/avision.c
++++ b/backend/avision.c
+@@ -4464,8 +4464,11 @@ get_frame_info (Avision_Scanner* s)
+   else
+     dev->frame_range.max = 1;
+ 
+-  /* no frame to select or holder to eject without a film holder */
+-  if (dev->film_features & AV_FILM_HOLDER_SENSE) {
++  /* no frame to select or holder to eject without a film holder; the
++     older Minolta film scanners (Dual II, Dual III, Elite 5400) report an
++     empty holder the same way, so they show it too */
++  if ((dev->film_features & AV_FILM_HOLDER_SENSE) ||
++      dev->scanner_type == AV_FILM) {
+     if (result[0] == 0xff) {
+       /* the frame byte is meaningless without a holder */
+       dev->current_frame = 1;
+@@ -8305,8 +8308,8 @@ init_options (Avision_Scanner* s)
+   s->opt[OPT_EJECT].unit = SANE_UNIT_NONE;
+   s->opt[OPT_EJECT].size = 0;
+   s->opt[OPT_EJECT].constraint_type = SANE_CONSTRAINT_NONE;
+-  if (!(dev->film_features & AV_FILM_HOLDER_SENSE) ||
+-      dev->holder_type == 0xff)
++  /* frame 0xff ejects on the older Minolta film scanners too */
++  if (dev->scanner_type != AV_FILM || dev->holder_type == 0xff)
+     s->opt[OPT_EJECT].cap |= SANE_CAP_INACTIVE;
+ 
+   /* power save time */

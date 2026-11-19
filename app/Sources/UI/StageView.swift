@@ -34,7 +34,9 @@ struct ConnectSteps: View {
                     step(2, "Warming up the lamp", detail: "Keep the film holder out for now", state: warmState,
                          trailing: warmTrailing(ctx.date))
                     step(3, "Calibrate", detail: "Needs an empty scanner", state: calState)
-                    step(4, "Insert the film strip holder", detail: "Front door open to 35 mm, not all the way", state: .todo)
+                    step(4, "Insert the film strip holder",
+                         detail: model.capabilities.apsDoor ? "Front door open to 35 mm, not all the way" : "Once the steps above are done",
+                         state: .todo)
                 }
                 .frame(width: 560)
                 .animation(Motion.slide, value: model.connection)
@@ -58,7 +60,7 @@ struct ConnectSteps: View {
 
     private var plugState: StepState { model.connection == .searching ? .now : .done }
     private var plugDetail: String {
-        model.connection == .searching ? "Looking for a Dimage Scan Dual IV on USB" : "\(model.scanner?.displayName ?? "Scanner") is answering"
+        model.connection == .searching ? "Looking for a Dimage Scan Dual IV or Dual III on USB" : "\(model.scanner?.displayName ?? "Scanner") is answering"
     }
     private var warmState: StepState {
         switch model.connection {
@@ -126,14 +128,18 @@ struct ConnectSteps: View {
 }
 
 struct InsertHolder: View {
+    @Environment(AppModel.self) private var model
+
     var body: some View {
         VStack(spacing: 32) {
             Spacer()
             Image(systemName: "film").font(.system(size: 64, weight: .ultraLight)).foregroundStyle(Theme.accentText)
             VStack(spacing: 8) {
                 Text("Insert the film strip holder").font(.l)
-                Text("Open the front door only to the 35 mm position. Fully open is for APS, and then the scanner ignores the holder.")
-                    .foregroundStyle(Theme.textDim).multilineTextAlignment(.center).frame(maxWidth: 420)
+                if model.capabilities.apsDoor {
+                    Text("Open the front door only to the 35 mm position. Fully open is for APS, and then the scanner ignores the holder.")
+                        .foregroundStyle(Theme.textDim).multilineTextAlignment(.center).frame(maxWidth: 420)
+                }
                 Text("The app previews the whole strip as soon as the holder is in.").foregroundStyle(Theme.textDim)
             }
             Spacer()
@@ -194,9 +200,11 @@ struct Toolbar: View {
                 Label(model.stripNumber > 1 ? "Film strip \(model.stripNumber) · frames \(model.frames[0].name)–\(model.frames[5].name)" : "Film strip · 6 frames", systemImage: "film").labelStyle(.titleAndIcon)
                     .font(.m).padding(.horizontal, 16).frame(height: 40)
                     .background(Capsule().fill(Theme.surface2))
-                Button { model.eject() } label: { Image(systemName: "eject") }
-                    .chip().help("Eject the film holder (E)")
-                    .accessibilityLabel("Eject film holder")
+                if model.capabilities.eject {
+                    Button { model.eject() } label: { Image(systemName: "eject") }
+                        .chip().help("Eject the film holder (E)")
+                        .accessibilityLabel("Eject film holder")
+                }
             }
             Spacer()
             if f.isScanned {

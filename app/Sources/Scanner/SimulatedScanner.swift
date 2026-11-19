@@ -1,15 +1,20 @@
 import Foundation
 
-/// A stand-in Dual IV that produces believable film scans, so the whole app
-/// can be used without the hardware. Frame 6 is left blank (unexposed film).
+/// A stand-in Dual IV (or Dual III) that produces believable film scans, so the
+/// whole app can be used without the hardware. Frame 6 is left blank (unexposed film).
 final class SimulatedScanner: ScannerDevice, @unchecked Sendable {
-    let displayName = "Simulated Dual IV"
+    let displayName: String
+    let capabilities: ScannerCapabilities
     var film: FilmType
     private let lock = NSLock()
     private var cancelRequested = false
     private var holderInsertedAt: Date?
 
-    init(film: FilmType) { self.film = film }
+    init(film: FilmType, capabilities: ScannerCapabilities = .dualIV) {
+        self.film = film
+        self.capabilities = capabilities
+        displayName = capabilities == .dualIII ? "Simulated Dual III" : "Simulated Dual IV"
+    }
 
     func open() async throws {
         try await Task.sleep(for: .seconds(2))
@@ -33,8 +38,8 @@ final class SimulatedScanner: ScannerDevice, @unchecked Sendable {
 
     func scan(_ r: ScanRequest, progress: @escaping @Sendable (Double) -> Void) async throws -> ScanResult {
         lock.withLock { cancelRequested = false }
-        let dpi = r.preview ? 800 : r.settings.dpi
-        var seconds = r.preview ? 1.2 : 2.0 + Double(dpi) / 3200 * 5
+        let dpi = r.preview ? capabilities.previewDPI : r.settings.dpi
+        var seconds = r.preview ? 1.2 : 2.0 + Double(dpi) / Double(capabilities.fullDPI) * 5
         if !r.preview && r.settings.multiSample { seconds *= 3 }
         if !r.preview && r.settings.autofocus { seconds += 1.5 }
         let steps = 40
@@ -47,7 +52,9 @@ final class SimulatedScanner: ScannerDevice, @unchecked Sendable {
         let image = await Task.detached(priority: .userInitiated) {
             Self.render(frame: r.frame, dpi: dpi, film: film)
         }.value
-        return ScanResult(image: image, exposure: RGBExposure(r: 412, g: 980, b: 1240), focus: r.preview ? 0 : 34)
+        return ScanResult(image: image,
+                          exposure: capabilities.exposure ? RGBExposure(r: 412, g: 980, b: 1240) : nil,
+                          focus: capabilities.autofocus ? (r.preview ? 0 : 34) : nil)
     }
 
     // MARK: Fake film

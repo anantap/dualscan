@@ -55,7 +55,7 @@ extension AppModel {
             guard selected.isScanned else { return false }
             showBefore.toggle()
         case .eject:
-            guard !queueRunning, !previewRunning else { return false }
+            guard capabilities.eject, !queueRunning, !previewRunning else { return false }
             eject()
         case .cancel:
             guard picking != nil else { return false }

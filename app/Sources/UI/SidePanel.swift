@@ -212,6 +212,7 @@ struct SettingsCard: View {
     var body: some View {
         @Bindable var model = model
         let s = model.shownSettings
+        let caps = model.capabilities
         GlassCard(spacing: 16) {
             HStack {
                 CardKey(text: "Scan settings")
@@ -220,23 +221,35 @@ struct SettingsCard: View {
                     selection: Binding(get: { model.settingsScope }, set: { model.setSettingsScope($0) }), small: true)
                     .frame(width: 176)
             }
-            Seg(options: [(800, "800"), (1600, "1600"), (3200, "3200 dpi")], selection: $model.shownSettings.dpi)
-            HStack {
-                Text("Exposure")
-                Spacer()
-                Seg(options: [(true, "Auto"), (false, "Manual")], selection: $model.shownSettings.autoExposure, small: true)
-                    .frame(width: 176)
-            }
-            if !s.autoExposure {
-                VStack(spacing: 8) {
-                    exposureBar("Red", \.r)
-                    exposureBar("Green", \.g)
-                    exposureBar("Blue", \.b)
+            Seg(options: dpiOptions, selection: $model.shownSettings.dpi)
+            if caps.exposure {
+                HStack {
+                    Text("Exposure")
+                    Spacer()
+                    Seg(options: [(true, "Auto"), (false, "Manual")], selection: $model.shownSettings.autoExposure, small: true)
+                        .frame(width: 176)
+                }
+                if !s.autoExposure {
+                    VStack(spacing: 8) {
+                        exposureBar("Red", \.r)
+                        exposureBar("Green", \.g)
+                        exposureBar("Blue", \.b)
+                    }
                 }
             }
-            SettingRow(title: "Autofocus", detail: "A few seconds per frame", isOn: $model.shownSettings.autofocus)
-            SettingRow(title: "Multi-sample", detail: "Less noise, about 3× slower", isOn: $model.shownSettings.multiSample)
+            if caps.autofocus {
+                SettingRow(title: "Autofocus", detail: "A few seconds per frame", isOn: $model.shownSettings.autofocus)
+            }
+            if caps.multiSample {
+                SettingRow(title: "Multi-sample", detail: "Less noise, about 3× slower", isOn: $model.shownSettings.multiSample)
+            }
         }
+    }
+
+    /// The scanner's resolutions, "dpi" on the last one.
+    private var dpiOptions: [(Int, String)] {
+        let r = model.capabilities.resolutions
+        return r.map { ($0, $0 == r.last ? "\($0) dpi" : "\($0)") }
     }
 
     private func exposureBar(_ label: String, _ kp: WritableKeyPath<RGBExposure, Int>) -> some View {
@@ -269,7 +282,7 @@ struct QueueCard: View {
                     }
                     VStack(alignment: .leading, spacing: 0) {
                         Text("Frame \(f.name)")
-                        Dim(text: f.phase == .scanning ? "Scanning · \(Int(f.progress * 100))%" : model.settings(for: f).summary)
+                        Dim(text: f.phase == .scanning ? "Scanning · \(Int(f.progress * 100))%" : model.settings(for: f).summary(model.capabilities))
                     }
                     Spacer()
                     if f.phase == .queued {

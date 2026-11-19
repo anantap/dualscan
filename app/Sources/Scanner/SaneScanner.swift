@@ -11,9 +11,12 @@ enum SaneSession {
         setenv("SANE_CONFIG_DIR", dir.path, 1)
     }
 
-    /// Looks for a Dual IV. Runs on `queue`. When none is found SANE is shut
-    /// down again, so the next call rescans USB.
-    static func findDualIV() -> (name: String, model: String)? {
+    /// The scanners the app works with, as the driver names them.
+    static let supportedModels = ["Dual IV", "Dual III"]
+
+    /// Looks for a Dual IV or Dual III. Runs on `queue`. When none is found SANE
+    /// is shut down again, so the next call rescans USB.
+    static func findScanner() -> (name: String, model: String)? {
         if !initialized {
             var version: SANE_Int = 0
             guard sane_init(&version, nil) == SANE_STATUS_GOOD else { return nil }
@@ -25,7 +28,7 @@ enum SaneSession {
         while let dev = list[i] {
             let model = String(cString: dev.pointee.model)
             let vendor = String(cString: dev.pointee.vendor)
-            if model.localizedCaseInsensitiveContains("Dual IV") {
+            if supportedModels.contains(where: { model.localizedCaseInsensitiveContains($0) }) {
                 return (String(cString: dev.pointee.name), "\(vendor) \(model)")
             }
             i += 1
@@ -39,6 +42,7 @@ enum SaneSession {
 final class SaneScanner: ScannerDevice, @unchecked Sendable {
     let deviceName: String
     let displayName: String
+    private(set) var capabilities: ScannerCapabilities
     private var handle: SANE_Handle?
     private let lock = NSLock()
     private var cancelRequested = false
@@ -48,6 +52,8 @@ final class SaneScanner: ScannerDevice, @unchecked Sendable {
     init(deviceName: String, displayName: String) {
         self.deviceName = deviceName
         self.displayName = displayName
+        // Until the driver says more when the scanner opens.
+        capabilities = displayName.localizedCaseInsensitiveContains("Dual IV") ? .dualIV : .dualIII
     }
 
     // MARK: ScannerDevice
@@ -58,7 +64,37 @@ final class SaneScanner: ScannerDevice, @unchecked Sendable {
             let st = sane_open(self.deviceName, &h)
             guard st == SANE_STATUS_GOOD, let h else { throw Self.error("Could not open the scanner", st) }
             self.handle = h
+            self.capabilities = self.readCapabilities()
         }
+    }
+
+    /// What the driver offers for this model. Exposure, focus and multi-sample
+    /// options are there for every model, but inactive where the model can't.
+    private func readCapabilities() -> ScannerCapabilities {
+        var caps = capabilities
+        if let (_, d) = option("resolution") {
+            if d.pointee.constraint_type == SANE_CONSTRAINT_WORD_LIST, let list = d.pointee.constraint.word_list {
+                // The Dual IV: a list, its first word is the count.
+                let all = (0..<Int(list[0])).map { Int(list[$0 + 1]) }
+                let full = all.max() ?? caps.fullDPI
+                caps.resolutions = all.filter { full % $0 == 0 && $0 * 4 >= full }.sorted()
+            } else if d.pointee.constraint_type == SANE_CONSTRAINT_RANGE, let r = d.pointee.constraint.range {
+                // Older models: any resolution up to the sensor's; offer full, half and a quarter.
+                let full = Int(r.pointee.max)
+                if full > 0 { caps.resolutions = [full / 4, full / 2, full] }
+            }
+            caps.previewDPI = caps.resolutions.first ?? caps.previewDPI
+        }
+        caps.exposure = isActive("ae")
+        caps.autofocus = isActive("autofocus")
+        caps.multiSample = isActive("multi-sample")
+        caps.eject = option("eject") != nil
+        return caps
+    }
+
+    private func isActive(_ name: String) -> Bool {
+        guard let (_, d) = option(name) else { return false }
+        return isActive(d)
     }
 
     func holderPresent() async -> Bool {
@@ -104,7 +140,7 @@ final class SaneScanner: ScannerDevice, @unchecked Sendable {
         let s = r.settings
         setString("mode", preferring: ["16bit Color", "12bit Color", "Color"])
         setBool("preview", false)
-        setNumber("resolution", Double(r.preview ? 800 : s.dpi))
+        setNumber("resolution", Double(r.preview ? capabilities.previewDPI : s.dpi))
         setNumber("frame", Double(r.frame))
         setBool("multi-sample", r.preview ? false : s.multiSample)
         setBool("autofocus", r.preview ? false : s.autofocus)
@@ -151,9 +187,12 @@ final class SaneScanner: ScannerDevice, @unchecked Sendable {
         let lines = bytes.count / bpl
         let image = try Self.toImage(bytes, width: width, lines: lines, bytesPerLine: bpl,
                                      depth: Int(p.depth), gray: p.format == SANE_FRAME_GRAY)
-        let exposure = RGBExposure(r: getInt("scan-exposure-time-r") ?? 100,
-                                   g: getInt("scan-exposure-time-g") ?? 100,
-                                   b: getInt("scan-exposure-time-b") ?? 100)
+        // Models without per-channel exposure have nothing to report.
+        let exposure = capabilities.exposure
+            ? RGBExposure(r: getInt("scan-exposure-time-r") ?? 100,
+                          g: getInt("scan-exposure-time-g") ?? 100,
+                          b: getInt("scan-exposure-time-b") ?? 100)
+            : nil
         return ScanResult(image: image, exposure: exposure, focus: getInt("focus"))
     }
 

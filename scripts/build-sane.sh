@@ -1,6 +1,6 @@
 #!/bin/bash
 # Builds the SANE driver that goes inside Dual Scan.app into ../sane/:
-# only the avision backend (Dimage Scan Dual IV), as one static library with the
+# only the avision backend (Dimage Scan Dual IV and Dual III), as one static library with the
 # backend preloaded, plus a static libusb. The app then needs nothing outside itself.
 # Skips the build when ../sane already holds this commit.
 set -euo pipefail

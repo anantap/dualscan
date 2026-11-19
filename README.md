@@ -1,6 +1,7 @@
 # Dual Scan
 
-A Mac app for the Konica Minolta Dimage Scan Dual IV, to replace VueScan.
+A Mac app for the Konica Minolta Dimage Scan Dual IV and the Minolta Dimage
+Scan Dual III, to replace VueScan.
 Scan once at full quality, make a base edit live (no rescans), then export
 a JPEG, a 16-bit base TIFF or the raw scan, or open the scans in another app.
 
@@ -11,6 +12,13 @@ support to its `avision` driver in November 2026. It is not in a SANE release
 yet, so `scripts/build-sane.sh` builds it from a pinned master commit into
 `sane/`: only the avision backend, as one static library, with a static libusb.
 Both are linked into the app, so `Dual Scan.app` needs nothing outside itself.
+
+The Dual III has been in that driver for years. The app asks the driver what
+the connected model can do and shows only that: on the Dual III that is 705,
+1410 or 2820 dpi, with no auto exposure, autofocus or per-channel exposure
+(the scanner handles exposure itself). A small patch in `scripts/sane-patches/`
+lets the driver report an empty holder and eject on the Dual III too, as it
+already does on the Dual IV.
 
 Needs `brew install autoconf autoconf-archive automake libtool pkgconf libusb gettext xcodegen`.
 
@@ -36,7 +44,7 @@ build 1 and never looks for updates.
 The app has a simulated Dual IV that produces fake orange negatives:
 
 - on the first screen, click "No scanner here? Use a simulated one", or
-- start it with `--simulate`.
+- start it with `--simulate`, or `--simulate-dual-iii` to simulate a Dual III.
 
 `--selftest <folder>` runs the whole flow on the simulator, saves pictures of
 the window and the exported files there, and quits.
