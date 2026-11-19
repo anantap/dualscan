@@ -3,7 +3,7 @@ import Foundation
 import Observation
 
 /// Keeps the app up to date from the repository's GitHub releases, like Roll Converter. Every push
-/// builds the app and publishes it as the latest release, tagged `build-<number>`. The app looks for a
+/// to the `dual-iii` branch builds the app and publishes it as a release tagged `dual-iii-build-<number>`. The app looks for a
 /// newer one at launch, downloads it in the background, and puts it in place when you restart (or quit).
 @MainActor @Observable
 final class Updater {
@@ -23,8 +23,8 @@ final class Updater {
     var promptShown = false
 
     static let repository = "anantap/dualscan"
-    static let assetName = "Dual-Scan.zip"
-    static let appName = "Dual Scan.app"
+    static let assetName = Edition.releaseAsset
+    static let appName = "\(Edition.name).app"
 
     let currentBuild = Int(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "") ?? 0
     private var staged: URL?
@@ -54,7 +54,9 @@ final class Updater {
         let prerelease: Bool
         let assets: [Asset]
 
-        var build: Int? { tag_name.hasPrefix("build-") ? Int(tag_name.dropFirst(6)) : nil }
+        var build: Int? {
+            tag_name.hasPrefix(Edition.releaseTagPrefix) ? Int(tag_name.dropFirst(Edition.releaseTagPrefix.count)) : nil
+        }
     }
 
     /// Looks for a newer build. Started from the menu (`userInitiated`), it always shows the popup
@@ -76,7 +78,7 @@ final class Updater {
                 guard let latest, userInitiated || latest.build > skippedBuild else {
                     state = .upToDate
                     if userInitiated {
-                        alert("Dual Scan is up to date", "You have build \(currentBuild), the newest there is.")
+                        alert("\(Edition.name) is up to date", "You have build \(currentBuild), the newest there is.")
                     }
                     return
                 }
@@ -117,7 +119,7 @@ final class Updater {
     private static func newerReleases(than current: Int) async throws -> (build: Int, url: URL, notes: [String])? {
         var request = URLRequest(url: URL(string: "https://api.github.com/repos/\(repository)/releases?per_page=30")!)
         request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
-        request.setValue("DualScan", forHTTPHeaderField: "User-Agent")
+        request.setValue("DualScanIII", forHTTPHeaderField: "User-Agent")
         request.cachePolicy = .reloadIgnoringLocalCacheData
         let (data, response) = try await URLSession.shared.data(for: request)
         if (response as? HTTPURLResponse)?.statusCode == 404 { return nil }
@@ -171,10 +173,10 @@ final class Updater {
     var installProblem: String? {
         let app = Bundle.main.bundleURL
         if app.path.contains("/AppTranslocation/") {
-            return "Move Dual Scan to your Applications folder to update it."
+            return "Move \(Edition.name) to your Applications folder to update it."
         }
         if !FileManager.default.isWritableFile(atPath: app.deletingLastPathComponent().path) {
-            return "Dual Scan can't update itself in \(app.deletingLastPathComponent().lastPathComponent)."
+            return "\(Edition.name) can't update itself in \(app.deletingLastPathComponent().lastPathComponent)."
         }
         return nil
     }

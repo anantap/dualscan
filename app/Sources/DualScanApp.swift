@@ -10,7 +10,7 @@ struct DualScanApp: App {
     }
 
     var body: some Scene {
-        Window("Dual Scan", id: "main") {
+        Window(Edition.name, id: "main") {
             MainView()
                 .environment(model)
                 .frame(minWidth: 1100, minHeight: 720)

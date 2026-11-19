@@ -11,10 +11,7 @@ enum SaneSession {
         setenv("SANE_CONFIG_DIR", dir.path, 1)
     }
 
-    /// The scanners the app works with, as the driver names them.
-    static let supportedModels = ["Dual IV", "Dual III"]
-
-    /// Looks for a Dual IV or Dual III. Runs on `queue`. When none is found SANE
+    /// Looks for a Dual III. Runs on `queue`. When none is found SANE
     /// is shut down again, so the next call rescans USB.
     static func findScanner() -> (name: String, model: String)? {
         if !initialized {
@@ -28,7 +25,7 @@ enum SaneSession {
         while let dev = list[i] {
             let model = String(cString: dev.pointee.model)
             let vendor = String(cString: dev.pointee.vendor)
-            if supportedModels.contains(where: { model.localizedCaseInsensitiveContains($0) }) {
+            if Edition.supportedModels.contains(where: { model.localizedCaseInsensitiveContains($0) }) {
                 return (String(cString: dev.pointee.name), "\(vendor) \(model)")
             }
             i += 1

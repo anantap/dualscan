@@ -24,7 +24,7 @@ targets:
     info:
       path: Info.plist
       properties:
-        CFBundleDisplayName: Dual Scan
+        CFBundleDisplayName: Dual Scan III
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         LSApplicationCategoryType: public.app-category.photography
@@ -32,8 +32,8 @@ targets:
         NSHumanReadableCopyright: For personal use.
     settings:
       base:
-        PRODUCT_NAME: Dual Scan
-        PRODUCT_BUNDLE_IDENTIFIER: nl.ananta.dualscan
+        PRODUCT_NAME: Dual Scan III
+        PRODUCT_BUNDLE_IDENTIFIER: nl.ananta.dualscan3
         MARKETING_VERSION: "0.1.0"
         CURRENT_PROJECT_VERSION: "1"
         SWIFT_VERSION: "5.0"

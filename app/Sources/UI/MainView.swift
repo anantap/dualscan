@@ -24,7 +24,7 @@ struct MainView: View {
             UpdatePrompt()
         }
         .modifier(KeyboardCommands())
-        .alert("Dual Scan", isPresented: Binding(get: { model.message != nil }, set: { if !$0 { model.message = nil } })) {
+        .alert(Edition.name, isPresented: Binding(get: { model.message != nil }, set: { if !$0 { model.message = nil } })) {
             Button("OK") { model.message = nil }
         } message: {
             Text(model.message ?? "")

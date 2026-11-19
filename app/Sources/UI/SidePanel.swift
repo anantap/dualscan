@@ -46,7 +46,7 @@ struct ConnectPanel: View {
         @Bindable var model = model
         PanelLayout {
             TimelineView(.periodic(from: .now, by: 1)) { ctx in
-                HeadCard(title: "Dual Scan", subtitle: subtitle, status: status, busy: model.mode == .connecting,
+                HeadCard(title: Edition.name, subtitle: subtitle, status: status, busy: model.mode == .connecting,
                          count: elapsed(ctx.date), countSup: model.mode == .connecting ? "elapsed" : "")
             }
             GlassCard(spacing: 16) {

@@ -60,7 +60,7 @@ struct ConnectSteps: View {
 
     private var plugState: StepState { model.connection == .searching ? .now : .done }
     private var plugDetail: String {
-        model.connection == .searching ? "Looking for a Dimage Scan Dual IV or Dual III on USB" : "\(model.scanner?.displayName ?? "Scanner") is answering"
+        model.connection == .searching ? "Looking for a \(Edition.model) on USB" : "\(model.scanner?.displayName ?? "Scanner") is answering"
     }
     private var warmState: StepState {
         switch model.connection {

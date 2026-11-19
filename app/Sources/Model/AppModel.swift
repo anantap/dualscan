@@ -28,8 +28,8 @@ final class AppModel {
 
     // Roll
     var rollName = "Roll 01"
-    /// Where scans are kept while you work: ~/Pictures/Dual Scan/<date> <roll>.
-    var libraryRoot = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Pictures/Dual Scan", isDirectory: true)
+    /// Where scans are kept while you work: ~/Pictures/Dual Scan III/<date> <roll>.
+    var libraryRoot = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Pictures/\(Edition.name)", isDirectory: true)
     let day = Date().formatted(.iso8601.year().month().day())
     var rollFolder: URL { libraryRoot.appendingPathComponent("\(day) \(rollName)", isDirectory: true) }
     /// Where exports go; chosen in the export sheet, the roll folder by default.
@@ -172,11 +172,6 @@ final class AppModel {
 
     func start() {
         SaneSession.configure()
-        if CommandLine.arguments.contains("--simulate-dual-iii") {
-            useSimulator = true
-            simulatedModel = .dualIII
-            extraWarmupMinutes = 0
-        }
         if CommandLine.arguments.contains("--simulate") || CommandLine.arguments.contains("--selftest") {
             useSimulator = true
             extraWarmupMinutes = 0
@@ -185,7 +180,7 @@ final class AppModel {
     }
 
     /// Which model the simulator plays.
-    @ObservationIgnored var simulatedModel = ScannerCapabilities.dualIV
+    @ObservationIgnored var simulatedModel = Edition.simulated
 
     func useSimulatedScanner() {
         useSimulator = true
