@@ -3,6 +3,7 @@ name: Dual III app
 # Builds Dual Scan III on a Mac (with the SANE driver inside), runs the self-test on the simulated
 # Dual III, and publishes it as a release tagged dual-iii-build-<n>. That release is never marked
 # "latest" and Dual Scan (the Dual IV app on main) only takes build-<n> tags, so it never sees it.
+# To share it: https://github.com/anantap/dualscan/releases?q=dual-iii-build
 on:
   push:
     branches: [dual-iii]
